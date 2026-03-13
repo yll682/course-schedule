@@ -3,3 +3,14 @@ __pycache__/
 *.log
 
 参考文件/
+
+# 数据库（含用户凭据，不入库）
+*.db
+
+# 抓包分析产物
+captured_*.json
+app.js
+sniff_login.py
+
+# 本地 IDE 配置
+.claude/

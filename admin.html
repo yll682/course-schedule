@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理后台</title>
+    <title>设置 - 课程表</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -12,57 +12,180 @@
             background: light-dark(#f5f5f5, #1a1a1a);
             color: light-dark(#333, #e0e0e0);
         }
-        .container {
-            max-width: 800px; margin: 0 auto;
+        .container { max-width: 700px; margin: 0 auto; }
+        .card {
             background: light-dark(white, #2d2d2d);
-            padding: 30px; border-radius: 8px;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
-        h1 { margin-top: 0; }
-        .setting { margin: 20px 0; padding: 15px; background: light-dark(#f9f9f9, #3a3a3a); border-radius: 4px; }
-        .setting label { display: block; margin-bottom: 8px; font-weight: bold; }
-        .setting input { width: 100%; padding: 8px; border: 1px solid light-dark(#ddd, #555); border-radius: 4px; background: light-dark(white, #2d2d2d); color: inherit; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; background: light-dark(#1890ff, #0d5aa7); color: white; cursor: pointer; margin-right: 10px; }
-        .btn:hover { opacity: 0.9; }
-        .btn-secondary { background: light-dark(#666, #555); }
+        .card-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 18px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid light-dark(#f0f0f0, #444);
+        }
+        .card-header h2 { margin: 0; font-size: 1rem; }
+        .badge {
+            font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+            font-weight: 600;
+        }
+        .badge-admin { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+        .badge-user  { background: light-dark(#f0f5ff, #1a1f3a); color: light-dark(#2f54eb, #85a5ff); border: 1px solid light-dark(#adc6ff, #2f54eb); }
+        .badge-soon  { background: light-dark(#f9f9f9, #333); color: #999; border: 1px solid #ddd; }
+        .field { margin-bottom: 16px; }
+        .field label { display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 6px; }
+        .field .hint { font-size: 0.78rem; color: #999; margin-top: 4px; }
+        .field input, .field select {
+            width: 100%; padding: 9px 12px;
+            border: 1px solid light-dark(#d9d9d9, #555);
+            border-radius: 6px;
+            background: light-dark(white, #3a3a3a);
+            color: inherit; font-size: 0.95rem;
+        }
+        .field input:disabled, .field select:disabled {
+            background: light-dark(#fafafa, #2a2a2a);
+            color: light-dark(#bbb, #666);
+            cursor: not-allowed;
+        }
+        .coming-soon {
+            padding: 14px 16px;
+            border-radius: 6px;
+            background: light-dark(#fafafa, #252525);
+            border: 1px dashed light-dark(#ddd, #444);
+            color: #aaa; font-size: 0.88rem; text-align: center;
+        }
+        .actions {
+            display: flex; gap: 10px; margin-top: 4px;
+        }
+        .btn {
+            padding: 9px 22px; border: none; border-radius: 6px;
+            font-size: 0.9rem; cursor: pointer;
+        }
+        .btn-primary { background: light-dark(#1890ff, #0d5aa7); color: white; }
+        .btn-primary:hover { opacity: 0.85; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-default {
+            background: light-dark(white, #3a3a3a);
+            color: inherit;
+            border: 1px solid light-dark(#d9d9d9, #555);
+        }
+        .btn-default:hover { background: light-dark(#f5f5f5, #444); }
+        .user-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .user-bar .info { font-size: 0.88rem; color: #999; }
+        .save-status {
+            font-size: 0.85rem; color: #52c41a;
+            display: none; margin-left: 10px;
+        }
+        .save-status.show { display: inline; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>⚙️ 管理后台</h1>
 
-        <div class="setting">
-            <label>课表抓取频率（分钟）</label>
-            <input type="number" id="fetch_interval" value="60" min="5" max="1440">
-            <small>后台定时抓取所有用户的上周、当周、下周课表</small>
+        <div class="user-bar">
+            <h1 style="margin:0;font-size:1.3rem">⚙️ 设置</h1>
+            <span class="info" id="user-info">加载中...</span>
         </div>
 
-        <div style="margin-top: 30px;">
-            <button class="btn" onclick="saveSettings()">保存设置</button>
-            <button class="btn btn-secondary" onclick="location.href='/'">返回</button>
+        <!-- ── 管理员专属：全局抓取设置 ── -->
+        <div class="card" id="admin-card" style="display:none">
+            <div class="card-header">
+                <h2>后台抓取</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+
+            <div class="field">
+                <label>自动抓取间隔（分钟）</label>
+                <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
+                <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30-120 分钟。</div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
+                <span class="save-status" id="admin-save-status">✓ 已保存</span>
+            </div>
         </div>
+
+        <!-- ── 个人设置（全员，预留） ── -->
+        <div class="card">
+            <div class="card-header">
+                <h2>个人偏好</h2>
+                <span class="badge badge-user">所有用户</span>
+            </div>
+            <div class="coming-soon">
+                暂无可配置项，后续功能开发中…
+            </div>
+        </div>
+
+        <!-- ── 返回 ── -->
+        <div style="margin-top:8px">
+            <button class="btn btn-default" onclick="location.href='/'">← 返回课程表</button>
+        </div>
+
     </div>
 
     <script>
-        async function loadSettings() {
-            const resp = await fetch('/api/admin/settings', { credentials: 'include' });
+        let isAdmin = false;
+
+        async function init() {
+            const resp = await fetch('/api/settings', { credentials: 'include' });
+            if (resp.status === 401) { location.href = '/'; return; }
+
             const data = await resp.json();
-            if (data.fetch_interval) document.getElementById('fetch_interval').value = data.fetch_interval;
+            isAdmin = data.is_admin || false;
+
+            // 更新用户栏
+            const userResp = await fetch('/api/user', { credentials: 'include' });
+            const user = await userResp.json();
+            const adminLabel = isAdmin ? ' · <span style="color:#cf1322">管理员</span>' : '';
+            document.getElementById('user-info').innerHTML =
+                `${user.name || user.username} (${user.username})${adminLabel}`;
+
+            // 填入当前设置值
+            if (data.fetch_interval) {
+                document.getElementById('fetch_interval').value = data.fetch_interval;
+            }
+
+            // 管理员才显示并可编辑
+            if (isAdmin) {
+                document.getElementById('admin-card').style.display = 'block';
+                document.getElementById('fetch_interval').disabled = false;
+                document.getElementById('save-admin-btn').disabled = false;
+            }
         }
 
-        async function saveSettings() {
-            const settings = {
-                fetch_interval: document.getElementById('fetch_interval').value
-            };
-            await fetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(settings)
-            });
-            alert('保存成功');
+        async function saveAdminSettings() {
+            const btn = document.getElementById('save-admin-btn');
+            btn.disabled = true;
+            btn.textContent = '保存中…';
+
+            try {
+                const resp = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        fetch_interval: document.getElementById('fetch_interval').value,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    const status = document.getElementById('admin-save-status');
+                    status.classList.add('show');
+                    setTimeout(() => status.classList.remove('show'), 2500);
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '保存';
+            }
         }
 
-        loadSettings();
+        init();
     </script>
 </body>
 </html>

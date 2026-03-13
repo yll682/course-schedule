@@ -61,12 +61,12 @@
         <div class="toolbar">
             <div class="week-selector">
                 <button onclick="changeWeek(-1)">◀ 上周</button>
-                <span id="current-week">第2周</span>
+                <span id="current-week">加载中...</span>
                 <button onclick="changeWeek(1)">下周 ▶</button>
             </div>
             <div class="user-info">
                 <span id="username"></span>
-                <button class="btn" id="admin-btn" onclick="location.href='/admin.html'" style="display:none">管理</button>
+                <button class="btn" id="admin-btn" onclick="location.href='/admin.html'">设置</button>
                 <button class="btn" onclick="logout()">退出</button>
             </div>
         </div>
@@ -76,7 +76,8 @@
     </div>
 
     <script>
-        let currentWeek = 2;
+        let currentWeek = 0;  // 0 = 当前周（由服务端决定）
+        let maxWeek = 20;
         let userData = null;
 
         async function checkAuth() {
@@ -87,10 +88,7 @@
                 return;
             }
             userData = data;
-            document.getElementById('username').textContent = data.username;
-            if (data.is_admin) {
-                document.getElementById('admin-btn').style.display = 'inline-block';
-            }
+            document.getElementById('username').textContent = data.name || data.username;
         }
 
         async function logout() {
@@ -99,17 +97,33 @@
         }
 
         function changeWeek(delta) {
+            if (currentWeek === 0) return;  // 尚未加载完成
             currentWeek += delta;
             if (currentWeek < 1) currentWeek = 1;
-            if (currentWeek > 20) currentWeek = 20;
+            if (currentWeek > maxWeek) currentWeek = maxWeek;
             document.getElementById('current-week').textContent = `第${currentWeek}周`;
             loadCourses();
         }
 
         async function loadCourses() {
+            document.getElementById('timetable').innerHTML =
+                '<div style="grid-column:1/-1;padding:20px;text-align:center;color:#999">加载中...</div>';
             try {
                 const resp = await fetch(`/api/courses/${currentWeek}`, { credentials: 'include' });
                 const data = await resp.json();
+
+                if (data.error) {
+                    document.getElementById('timetable').innerHTML =
+                        `<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">${data.error}</div>`;
+                    return;
+                }
+
+                // 首次加载（week=0）时，从响应更新当前周次和最大周次
+                if (data.metadata) {
+                    if (currentWeek === 0) currentWeek = data.metadata.current_week || 2;
+                    if (data.metadata.max_week) maxWeek = data.metadata.max_week;
+                    document.getElementById('current-week').textContent = `第${currentWeek}周`;
+                }
 
                 if (data.from_cache) {
                     const warning = document.getElementById('cache-warning');
@@ -121,7 +135,8 @@
 
                 renderCourses(data);
             } catch (e) {
-                alert('加载失败');
+                document.getElementById('timetable').innerHTML =
+                    '<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">加载失败，请刷新重试</div>';
             }
         }
 
@@ -129,24 +144,21 @@
             document.getElementById('meta').innerHTML =
                 `${data.metadata.用户} | ${data.metadata.班级} | ${data.metadata.周次} | 更新: ${new Date(data.metadata.提取时间).toLocaleString()}`;
 
-            const weekMap = {
-                'Sunday': '周一', 'monday': '周二', 'Tuesday': '周三',
-                'Wednesday': '周四', 'Thursday': '周五', 'Friday': '周六', 'Saturday': '周日'
-            };
-
-            const weekOrder = ['Sunday', 'monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const weekMap   = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
+            const weekOrder = ['1','2','3','4','5','6','0'];
             const table = document.getElementById('timetable');
 
             table.innerHTML = '<div class="cell header">节次</div>';
             weekOrder.forEach(day => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
-                table.innerHTML += `<div class="cell header">${weekMap[day]}<br><small>${dayData.date.slice(5)}</small></div>`;
+                const dateStr = dayData && dayData.date ? dayData.date.slice(5) : '';
+                table.innerHTML += `<div class="cell header">${weekMap[day]}<br><small>${dateStr}</small></div>`;
             });
 
             const times = {
-                1: '8:30-9:15', 2: '9:20-10:05', 3: '10:15-11:00', 4: '11:05-11:50',
-                5: '14:30-15:15', 6: '15:25-16:10', 7: '16:20-17:05', 8: '17:15-18:00',
-                9: '19:00-19:45', 10: '19:55-20:40'
+                1:'08:30-09:15', 2:'09:20-10:05', 3:'10:25-11:10', 4:'11:15-12:00',
+                5:'14:30-15:20', 6:'15:25-16:10', 7:'16:20-17:05', 8:'17:10-18:00',
+                9:'19:00-19:45', 10:'19:55-20:40'
             };
 
             const occupied = {};
@@ -159,13 +171,11 @@
                     if (occupied[key]) return;
 
                     const dayData = data.完整课表.find(d => d.weekday === day);
-                    const course = dayData.courses.find(c => c.time_slots.start_slot === slot);
+                    const course = dayData && dayData.courses.find(c => c.time_slots.start_slot === slot);
 
                     if (course) {
                         const duration = course.time_slots.duration;
-                        for (let i = 0; i < duration; i++) {
-                            occupied[`${day}-${slot + i}`] = true;
-                        }
+                        for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         table.innerHTML += `
                             <div class="cell" style="grid-row: span ${duration}">
                                 <div class="course">
@@ -173,6 +183,7 @@
                                     <div class="course-info">📍 ${course.location}</div>
                                     <div class="course-info">⏰ ${course.time_slots.display}</div>
                                     <div class="course-info">👨‍🏫 ${course.teacher}</div>
+                                    ${course.weeks ? `<div class="course-info" style="opacity:0.6">${course.weeks}周</div>` : ''}
                                 </div>
                             </div>`;
                     } else {
