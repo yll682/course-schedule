@@ -5,5 +5,10 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./course_data.json:/app/course_data.json
+      - db_data:/app          # 持久化数据库和日志
+    env_file:
+      - .env                  # 从 .env 文件读取环境变量
     restart: unless-stopped
+
+volumes:
+  db_data:

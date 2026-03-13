@@ -76,6 +76,13 @@
     </div>
 
     <script>
+        // XSS 防护：插入 innerHTML 前转义所有 API 数据
+        function esc(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         let currentWeek = 0;  // 0 = 当前周（由服务端决定）
         let maxWeek = 20;
         let userData = null;
@@ -142,7 +149,7 @@
 
         function renderCourses(data) {
             document.getElementById('meta').innerHTML =
-                `${data.metadata.用户} | ${data.metadata.班级} | ${data.metadata.周次} | 更新: ${new Date(data.metadata.提取时间).toLocaleString()}`;
+                `${esc(data.metadata.用户)} | ${esc(data.metadata.班级)} | ${esc(data.metadata.周次)} | 更新: ${new Date(data.metadata.提取时间).toLocaleString()}`;
 
             const weekMap   = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
             const weekOrder = ['1','2','3','4','5','6','0'];
@@ -177,13 +184,13 @@
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         table.innerHTML += `
-                            <div class="cell" style="grid-row: span ${duration}">
+                            <div class="cell" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
                                 <div class="course">
-                                    <div class="course-name">${course.course_name}</div>
-                                    <div class="course-info">📍 ${course.location}</div>
-                                    <div class="course-info">⏰ ${course.time_slots.display}</div>
-                                    <div class="course-info">👨‍🏫 ${course.teacher}</div>
-                                    ${course.weeks ? `<div class="course-info" style="opacity:0.6">${course.weeks}周</div>` : ''}
+                                    <div class="course-name">${esc(course.course_name)}</div>
+                                    <div class="course-info">📍 ${esc(course.location)}</div>
+                                    <div class="course-info">⏰ ${esc(course.time_slots.display)}</div>
+                                    <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
+                                    ${course.weeks ? `<div class="course-info" style="opacity:0.6">${esc(course.weeks)}周</div>` : ''}
                                 </div>
                             </div>`;
                     } else {

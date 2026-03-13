@@ -160,6 +160,11 @@
         }
 
         async function saveAdminSettings() {
+            const val = parseInt(document.getElementById('fetch_interval').value, 10);
+            if (isNaN(val) || val < 5 || val > 1440) {
+                alert('间隔必须在 5 到 1440 分钟之间');
+                return;
+            }
             const btn = document.getElementById('save-admin-btn');
             btn.disabled = true;
             btn.textContent = '保存中…';
@@ -170,7 +175,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({
-                        fetch_interval: document.getElementById('fetch_interval').value,
+                        fetch_interval: val,
                     }),
                 });
                 const data = await resp.json();
