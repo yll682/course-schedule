@@ -7,7 +7,7 @@ import threading
 import time as time_module
 from collections import defaultdict
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Flask, request, jsonify, session, send_from_directory
 from flask_cors import CORS
@@ -88,6 +88,12 @@ def init_db():
                       PRIMARY KEY (username, week))''')
         c.execute('''CREATE TABLE IF NOT EXISTS settings
                      (key TEXT PRIMARY KEY, value TEXT)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS share_tokens
+                     (token TEXT PRIMARY KEY, owner TEXT NOT NULL,
+                      week_from INTEGER NOT NULL, week_to INTEGER NOT NULL,
+                      expires_at TEXT NOT NULL, created_at TEXT NOT NULL,
+                      revoked INTEGER NOT NULL DEFAULT 0)''')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_share_owner ON share_tokens(owner)')
         for col_def in [
             'jw_token TEXT', 'token_time TEXT', 'jw_name TEXT',
             'jw_class TEXT', 'jw_kbjcmsid TEXT', 'password_enc TEXT',
@@ -291,6 +297,39 @@ def logout():
 
 @app.route('/api/user', methods=['GET'])
 def get_user():
+    # 分享浏览模式
+    if 'share_token' in session:
+        token = session['share_token']
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT owner, expires_at, week_from, week_to, revoked '
+                      'FROM share_tokens WHERE token=?', (token,))
+            row = c.fetchone()
+        if not row or row[4]:
+            session.clear()
+            return jsonify({'logged_in': False})
+        owner, expires_at, week_from, week_to, _ = row
+        try:
+            if datetime.fromisoformat(expires_at) < datetime.now():
+                session.clear()
+                return jsonify({'logged_in': False})
+        except ValueError:
+            session.clear()
+            return jsonify({'logged_in': False})
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT jw_name FROM users WHERE username=?', (owner,))
+            r = c.fetchone()
+        owner_name = (r[0] or owner) if r else owner
+        return jsonify({
+            'logged_in':        True,
+            'is_share_mode':    True,
+            'owner_name':       owner_name,
+            'share_week_from':  week_from,
+            'share_week_to':    week_to,
+            'share_expires_at': expires_at,
+        })
+
     if 'username' not in session:
         return jsonify({'logged_in': False})
     username = session['username']
@@ -309,10 +348,45 @@ def get_user():
 
 @app.route('/api/courses/<int:week>', methods=['GET'])
 def get_courses(week):
-    if 'username' not in session:
+    # ── 确定访问身份与周次限制 ──────────────────────────────────────────────────
+    share_mode = False
+    week_min, week_max = 1, 99
+
+    if 'share_token' in session:
+        token = session['share_token']
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT owner, expires_at, week_from, week_to, revoked '
+                      'FROM share_tokens WHERE token=?', (token,))
+            row = c.fetchone()
+        if not row or row[4]:
+            session.clear()
+            return jsonify({'error': '分享码已失效，请重新获取'}), 401
+        owner, expires_at, week_from, week_to, _ = row
+        try:
+            if datetime.fromisoformat(expires_at) < datetime.now():
+                session.clear()
+                return jsonify({'error': '分享码已过期'}), 401
+        except ValueError:
+            session.clear()
+            return jsonify({'error': '分享码无效'}), 401
+        username   = owner
+        share_mode = True
+        week_min, week_max = week_from, week_to
+    elif 'username' in session:
+        username = session['username']
+    else:
         return jsonify({'error': '未登录'}), 401
 
-    username  = session['username']
+    # 分享模式：week=0 默认从允许的最小周开始
+    if share_mode and week == 0:
+        week = week_min
+
+    # 分享模式：强制校验周次范围
+    if share_mode and not (week_min <= week <= week_max):
+        return jsonify({'error': f'分享码仅允许查看第 {week_min}~{week_max} 周'}), 403
+
+    # ── 正常抓取逻辑 ──────────────────────────────────────────────────────────
     cache_row = None
     if week != 0:
         with _db() as conn:
@@ -374,6 +448,144 @@ def settings():
         result = dict(c.fetchall())
     result['is_admin'] = is_admin
     return jsonify(result)
+
+
+# ── 分享码 ────────────────────────────────────────────────────────────────────
+
+@app.route('/api/share/enter', methods=['POST'])
+def share_enter():
+    """用分享码进入只读浏览模式（无需账号密码）"""
+    ip = request.remote_addr
+    if _rate_limited(ip):
+        return jsonify({'success': False, 'message': '请求过于频繁，请稍后再试'}), 429
+
+    token = (request.json or {}).get('token', '').strip().upper()
+    if not token:
+        return jsonify({'success': False, 'message': '请输入分享码'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT owner, expires_at, week_from, week_to, revoked '
+                  'FROM share_tokens WHERE token=?', (token,))
+        row = c.fetchone()
+
+    if not row or row[4]:
+        return jsonify({'success': False, 'message': '分享码无效或已撤销'}), 400
+    owner, expires_at, week_from, week_to, _ = row
+
+    try:
+        if datetime.fromisoformat(expires_at) < datetime.now():
+            return jsonify({'success': False, 'message': '分享码已过期'}), 400
+    except ValueError:
+        return jsonify({'success': False, 'message': '分享码无效'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT jw_name FROM users WHERE username=?', (owner,))
+        r = c.fetchone()
+    owner_name = (r[0] or owner) if r else owner
+
+    session.clear()
+    session['share_token'] = token
+    session['share_owner'] = owner
+    return jsonify({
+        'success':    True,
+        'owner_name': owner_name,
+        'week_from':  week_from,
+        'week_to':    week_to,
+        'expires_at': expires_at,
+    })
+
+
+@app.route('/api/share/create', methods=['POST'])
+def share_create():
+    """创建分享码（仅限已登录的正式用户）"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    data     = request.json or {}
+    username = session['username']
+
+    days = {'1d': 1, '7d': 7, '30d': 30, '180d': 180}.get(
+        data.get('expires_in', '7d'), 7)
+    expires_at = (datetime.now() + timedelta(days=days)).isoformat()
+
+    try:
+        week_from = max(1, int(data.get('week_from', 1)))
+        week_to   = min(30, int(data.get('week_to', 19)))
+        if week_from > week_to:
+            return jsonify({'error': '起始周不能大于结束周'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': '无效的周次'}), 400
+
+    token = secrets.token_hex(4).upper()
+    with _db() as conn:
+        conn.execute(
+            'INSERT INTO share_tokens '
+            '(token, owner, week_from, week_to, expires_at, created_at, revoked) '
+            'VALUES (?, ?, ?, ?, ?, ?, 0)',
+            (token, username, week_from, week_to, expires_at, datetime.now().isoformat()),
+        )
+        conn.commit()
+
+    return jsonify({
+        'success':    True,
+        'token':      token,
+        'expires_at': expires_at,
+        'week_from':  week_from,
+        'week_to':    week_to,
+    })
+
+
+@app.route('/api/share/list', methods=['GET'])
+def share_list():
+    """列出当前用户的所有有效分享码"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    username = session['username']
+    now      = datetime.now().isoformat()
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute(
+            'SELECT token, week_from, week_to, expires_at, created_at '
+            'FROM share_tokens WHERE owner=? AND revoked=0 ORDER BY created_at DESC',
+            (username,),
+        )
+        rows = c.fetchall()
+
+    return jsonify({'tokens': [
+        {
+            'token':      r[0],
+            'week_from':  r[1],
+            'week_to':    r[2],
+            'expires_at': r[3],
+            'created_at': r[4],
+            'expired':    r[3] < now,
+        }
+        for r in rows
+    ]})
+
+
+@app.route('/api/share/revoke', methods=['POST'])
+def share_revoke():
+    """撤销分享码"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    username = session['username']
+    token    = (request.json or {}).get('token', '').strip().upper()
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT owner FROM share_tokens WHERE token=?', (token,))
+        row = c.fetchone()
+        if not row or row[0] != username:
+            return jsonify({'error': '分享码不存在或无权撤销'}), 404
+        conn.execute('UPDATE share_tokens SET revoked=1 WHERE token=?', (token,))
+        conn.commit()
+
+    return jsonify({'success': True})
 
 
 if __name__ == '__main__':

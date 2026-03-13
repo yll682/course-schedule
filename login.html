@@ -36,6 +36,22 @@
         }
         button:hover { opacity: 0.9; }
         .error { color: #ff4d4f; margin-top: 10px; text-align: center; }
+        .divider {
+            display: flex; align-items: center; gap: 10px;
+            margin: 20px 0 4px; color: light-dark(#bbb, #666); font-size: 14px;
+        }
+        .divider::before, .divider::after {
+            content: ''; flex: 1;
+            border-top: 1px solid light-dark(#e8e8e8, #444);
+        }
+        .share-input { display: flex; gap: 8px; margin-top: 12px; }
+        .share-input input {
+            flex: 1; padding: 12px; margin: 0;
+            font-family: monospace; letter-spacing: 2px; text-transform: uppercase;
+        }
+        .share-input button {
+            width: auto; margin: 0; padding: 12px 16px; white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -44,6 +60,11 @@
         <input type="text" id="username" placeholder="学号" autofocus>
         <input type="password" id="password" placeholder="密码">
         <button onclick="login()">登录</button>
+        <div class="divider">或使用分享码</div>
+        <div class="share-input">
+            <input type="text" id="share-code" placeholder="输入分享码（如 A3F7B2C1）" maxlength="8">
+            <button onclick="enterShare()">查看</button>
+        </div>
         <div class="error" id="error"></div>
     </div>
     <script>
@@ -78,6 +99,32 @@
         document.getElementById('password').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') login();
         });
+        document.getElementById('share-code').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') enterShare();
+        });
+
+        async function enterShare() {
+            const code  = document.getElementById('share-code').value.trim().toUpperCase();
+            const error = document.getElementById('error');
+            if (!code) { error.textContent = '请输入分享码'; return; }
+            error.textContent = '';
+            try {
+                const resp = await fetch('/api/share/enter', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ token: code }),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    error.textContent = data.message || '分享码无效';
+                }
+            } catch (e) {
+                error.textContent = '网络错误';
+            }
+        }
     </script>
 </body>
 </html>

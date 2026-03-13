@@ -71,6 +71,7 @@
             </div>
         </div>
         <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:10px 0;text-align:center"></div>
+        <div id="share-banner" style="display:none;background:#e6f4ff;color:#0958d9;padding:10px 14px;border-radius:4px;margin:10px 0;text-align:center;border:1px solid #91caff"></div>
         <div class="meta" id="meta"></div>
         <div class="timetable" id="timetable"></div>
     </div>
@@ -83,8 +84,11 @@
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        let currentWeek = 0;  // 0 = 当前周（由服务端决定）
+        let currentWeek = 0;
         let maxWeek = 20;
+        let shareWeekMin = 1;  // 分享模式下的允许范围
+        let shareWeekMax = 20;
+        let isShareMode  = false;
         let userData = null;
 
         async function checkAuth() {
@@ -95,7 +99,21 @@
                 return;
             }
             userData = data;
-            document.getElementById('username').textContent = data.name || data.username;
+            if (data.is_share_mode) {
+                isShareMode  = true;
+                shareWeekMin = data.share_week_from;
+                shareWeekMax = data.share_week_to;
+                // 分享模式：隐藏设置按钮，退出按钮改文字
+                document.getElementById('admin-btn').style.display = 'none';
+                document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
+                const expiry = new Date(data.share_expires_at).toLocaleDateString();
+                const banner = document.getElementById('share-banner');
+                banner.style.display = 'block';
+                banner.textContent =
+                    `👁 分享浏览模式（只读）· 第 ${shareWeekMin}~${shareWeekMax} 周 · 有效至 ${expiry}`;
+            } else {
+                document.getElementById('username').textContent = data.name || data.username;
+            }
         }
 
         async function logout() {
@@ -104,10 +122,12 @@
         }
 
         function changeWeek(delta) {
-            if (currentWeek === 0) return;  // 尚未加载完成
+            if (currentWeek === 0) return;
             currentWeek += delta;
-            if (currentWeek < 1) currentWeek = 1;
-            if (currentWeek > maxWeek) currentWeek = maxWeek;
+            const minW = isShareMode ? shareWeekMin : 1;
+            const maxW = isShareMode ? shareWeekMax : maxWeek;
+            if (currentWeek < minW) currentWeek = minW;
+            if (currentWeek > maxW) currentWeek = maxW;
             document.getElementById('current-week').textContent = `第${currentWeek}周`;
             loadCourses();
         }
@@ -125,9 +145,15 @@
                     return;
                 }
 
-                // 首次加载（week=0）时，从响应更新当前周次和最大周次
+                // 首次加载时，从响应更新周次和上限
                 if (data.metadata) {
-                    if (currentWeek === 0) currentWeek = data.metadata.current_week || 2;
+                    if (currentWeek === 0) {
+                        let w = data.metadata.current_week || 2;
+                        if (isShareMode) {
+                            w = Math.max(shareWeekMin, Math.min(shareWeekMax, w));
+                        }
+                        currentWeek = w;
+                    }
                     if (data.metadata.max_week) maxWeek = data.metadata.max_week;
                     document.getElementById('current-week').textContent = `第${currentWeek}周`;
                 }

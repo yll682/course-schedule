@@ -111,14 +111,49 @@
             </div>
         </div>
 
-        <!-- ── 个人设置（全员，预留） ── -->
+        <!-- ── 个人设置（全员）：分享码管理 ── -->
         <div class="card">
             <div class="card-header">
-                <h2>个人偏好</h2>
+                <h2>分享码</h2>
                 <span class="badge badge-user">所有用户</span>
             </div>
-            <div class="coming-soon">
-                暂无可配置项，后续功能开发中…
+
+            <!-- 创建 -->
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+                <div class="field" style="margin:0;flex:1;min-width:120px">
+                    <label>有效期</label>
+                    <select id="share-expires">
+                        <option value="1d">1 天</option>
+                        <option value="7d" selected>7 天</option>
+                        <option value="30d">30 天</option>
+                        <option value="180d">半年</option>
+                    </select>
+                </div>
+                <div class="field" style="margin:0;flex:1;min-width:80px">
+                    <label>从第几周</label>
+                    <input type="number" id="share-week-from" value="1" min="1" max="30">
+                </div>
+                <div class="field" style="margin:0;flex:1;min-width:80px">
+                    <label>到第几周</label>
+                    <input type="number" id="share-week-to" value="19" min="1" max="30">
+                </div>
+                <button class="btn btn-primary" onclick="createShare()" style="white-space:nowrap">生成分享码</button>
+            </div>
+
+            <!-- 生成结果 -->
+            <div id="share-result" style="display:none;background:light-dark(#f6ffed,#162312);border:1px solid light-dark(#b7eb8f,#274916);border-radius:6px;padding:12px;margin-bottom:16px">
+                <div style="font-size:0.85rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成，发给对方即可</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <code id="share-result-code" style="font-size:1.3rem;letter-spacing:4px;font-weight:bold"></code>
+                    <button class="btn btn-default" style="padding:4px 10px;font-size:0.8rem" onclick="copyCode()">复制</button>
+                </div>
+                <div id="share-result-info" style="font-size:0.8rem;color:#999;margin-top:4px"></div>
+            </div>
+
+            <!-- 已有分享码列表 -->
+            <div id="share-list-wrap">
+                <div style="font-size:0.85rem;color:#999;margin-bottom:8px">我的分享码</div>
+                <div id="share-list">加载中...</div>
             </div>
         </div>
 
@@ -191,6 +226,83 @@
         }
 
         init();
+        loadShares();
+
+        // ── 分享码 ──────────────────────────────────────────────────────────────
+        async function loadShares() {
+            const resp = await fetch('/api/share/list', { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const el   = document.getElementById('share-list');
+            if (!data.tokens || data.tokens.length === 0) {
+                el.innerHTML = '<div style="color:#aaa;font-size:0.85rem">暂无分享码</div>';
+                return;
+            }
+            el.innerHTML = data.tokens.map(t => {
+                const exp   = new Date(t.expires_at).toLocaleString();
+                const badge = t.expired
+                    ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
+                    : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
+                return `
+                <div style="display:flex;align-items:center;justify-content:space-between;
+                            padding:8px 10px;border:1px solid light-dark(#f0f0f0,#444);
+                            border-radius:6px;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${t.token}</code>
+                    <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
+                    <span style="font-size:0.8rem;color:#999">至 ${exp}</span>
+                    ${badge}
+                    <button class="btn btn-default" style="padding:3px 10px;font-size:0.8rem"
+                            onclick="revokeShare('${t.token}')">撤销</button>
+                </div>`;
+            }).join('');
+        }
+
+        async function createShare() {
+            const wFrom = parseInt(document.getElementById('share-week-from').value, 10);
+            const wTo   = parseInt(document.getElementById('share-week-to').value, 10);
+            if (isNaN(wFrom) || isNaN(wTo) || wFrom < 1 || wTo > 30 || wFrom > wTo) {
+                alert('请检查周次范围（1~30，起始不能大于结束）');
+                return;
+            }
+            const resp = await fetch('/api/share/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    expires_in: document.getElementById('share-expires').value,
+                    week_from:  wFrom,
+                    week_to:    wTo,
+                }),
+            });
+            const data = await resp.json();
+            if (!data.success) { alert(data.error || '生成失败'); return; }
+
+            document.getElementById('share-result-code').textContent = data.token;
+            document.getElementById('share-result-info').textContent =
+                `第 ${data.week_from}~${data.week_to} 周 · 有效至 ${new Date(data.expires_at).toLocaleString()}`;
+            document.getElementById('share-result').style.display = 'block';
+            loadShares();
+        }
+
+        function copyCode() {
+            const code = document.getElementById('share-result-code').textContent;
+            navigator.clipboard.writeText(code).then(() => alert(`已复制：${code}`));
+        }
+
+        async function revokeShare(token) {
+            if (!confirm(`确认撤销分享码 ${token}？`)) return;
+            await fetch('/api/share/revoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ token }),
+            });
+            loadShares();
+            // 如果当前展示的正好是被撤销的码，隐藏结果框
+            if (document.getElementById('share-result-code').textContent === token) {
+                document.getElementById('share-result').style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
