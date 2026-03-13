@@ -70,7 +70,6 @@ _BLOCKED_EXTS = {'.py', '.db', '.sh', '.bat', '.env', '.cfg', '.ini'}
 @contextmanager
 def _db():
     conn = sqlite3.connect(DB_FILE, timeout=10)
-    conn.execute('PRAGMA journal_mode=WAL')
     try:
         yield conn
     finally:
@@ -79,6 +78,8 @@ def _db():
 
 def init_db():
     with _db() as conn:
+        # WAL 模式只需设置一次，之后持久生效
+        conn.execute('PRAGMA journal_mode=WAL')
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS users
                      (username TEXT PRIMARY KEY, password_hash TEXT, last_login TEXT)''')
