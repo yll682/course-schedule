@@ -152,7 +152,7 @@
 
             <!-- 已有分享码列表 -->
             <div id="share-list-wrap">
-                <div style="font-size:0.85rem;color:#999;margin-bottom:8px">我的分享码</div>
+                <div style="font-size:0.85rem;color:#999;margin-bottom:8px" id="share-list-label">我的分享码</div>
                 <div id="share-list">加载中...</div>
             </div>
         </div>
@@ -166,6 +166,13 @@
 
     <script>
         let isAdmin = false;
+
+        // XSS 防护
+        function esc(s) {
+            return String(s ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
 
         async function init() {
             const resp = await fetch('/api/settings', { credentials: 'include' });
@@ -230,10 +237,13 @@
 
         // ── 分享码 ──────────────────────────────────────────────────────────────
         async function loadShares() {
-            const resp = await fetch('/api/share/list', { credentials: 'include' });
+            const url  = isAdmin ? '/api/share/list?all=1' : '/api/share/list';
+            const resp = await fetch(url, { credentials: 'include' });
             if (!resp.ok) return;
-            const data = await resp.json();
-            const el   = document.getElementById('share-list');
+            const data  = await resp.json();
+            const el    = document.getElementById('share-list');
+            const label = document.getElementById('share-list-label');
+            if (isAdmin) label.textContent = '所有用户的分享码';
             if (!data.tokens || data.tokens.length === 0) {
                 el.innerHTML = '<div style="color:#aaa;font-size:0.85rem">暂无分享码</div>';
                 return;
@@ -243,16 +253,20 @@
                 const badge = t.expired
                     ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
                     : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
+                const ownerTag = isAdmin
+                    ? `<span style="font-size:0.8rem;color:#1890ff;font-weight:500">${esc(t.owner_name || t.owner)}</span>`
+                    : '';
                 return `
                 <div style="display:flex;align-items:center;justify-content:space-between;
                             padding:8px 10px;border:1px solid light-dark(#f0f0f0,#444);
                             border-radius:6px;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${t.token}</code>
+                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
+                    ${ownerTag}
                     <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
                     <span style="font-size:0.8rem;color:#999">至 ${exp}</span>
                     ${badge}
                     <button class="btn btn-default" style="padding:3px 10px;font-size:0.8rem"
-                            onclick="revokeShare('${t.token}')">撤销</button>
+                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
                 </div>`;
             }).join('');
         }

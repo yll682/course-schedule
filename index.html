@@ -26,13 +26,10 @@
         .user-info { display: flex; align-items: center; gap: 10px; }
         .btn { padding: 6px 12px; border: 1px solid light-dark(#1890ff, #40a9ff); background: light-dark(#1890ff, #0d5aa7); color: white; border-radius: 4px; cursor: pointer; }
         .btn:hover { opacity: 0.8; }
-        .login-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
-        .login-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: light-dark(white, #2d2d2d); padding: 30px; border-radius: 8px; width: 90%; max-width: 400px; }
-        .login-box input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid light-dark(#ddd, #555); border-radius: 4px; background: light-dark(white, #3a3a3a); color: inherit; }
         .meta { text-align: center; color: light-dark(#999, #888); margin: 10px 0; font-size: clamp(0.75rem, 2vw, 0.9rem); }
         .timetable {
             display: grid;
-            grid-template-columns: minmax(40px, 60px) repeat(7, 1fr);
+            grid-template-columns: minmax(50px, 70px) repeat(7, 1fr);
             grid-auto-rows: minmax(50px, auto);
             gap: 1px;
             background: light-dark(#ddd, #444);
@@ -45,7 +42,7 @@
             color: white; font-weight: bold; text-align: center;
             padding: 8px; font-size: clamp(0.7rem, 2vw, 0.9rem);
         }
-        .time-slot { background: light-dark(#f0f0f0, #3a3a3a); font-size: clamp(0.7rem, 2vw, 0.85rem); text-align: center; font-weight: bold; }
+        .time-slot { background: light-dark(#f0f0f0, #3a3a3a); font-size: clamp(0.65rem, 1.8vw, 0.8rem); text-align: center; font-weight: bold; }
         .course { background: light-dark(#e6f7ff, #1a3a4a); border-left: 3px solid light-dark(#1890ff, #40a9ff); padding: 6px; font-size: clamp(0.7rem, 1.8vw, 0.85rem); height: 100%; }
         .course-name { font-weight: bold; margin-bottom: 3px; }
         .course-info { opacity: 0.8; font-size: clamp(0.65rem, 1.6vw, 0.75rem); line-height: 1.4; }
@@ -66,8 +63,9 @@
             </div>
             <div class="user-info">
                 <span id="username"></span>
+                <button class="btn" id="export-btn" onclick="exportTimetable()" style="display:none">导出</button>
                 <button class="btn" id="admin-btn" onclick="location.href='/admin.html'">设置</button>
-                <button class="btn" onclick="logout()">退出</button>
+                <button class="btn" id="logout-btn" onclick="logout()">退出</button>
             </div>
         </div>
         <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:10px 0;text-align:center"></div>
@@ -86,16 +84,31 @@
 
         let currentWeek = 0;
         let maxWeek = 20;
-        let shareWeekMin = 1;  // 分享模式下的允许范围
+        let shareWeekMin = 1;
         let shareWeekMax = 20;
         let isShareMode  = false;
+        let importMode   = false;
+        let lastCourseData = null;
         let userData = null;
 
         async function checkAuth() {
+            // 导入预览模式：从 sessionStorage 加载课表
+            const raw = sessionStorage.getItem('import_data');
+            if (raw) {
+                try {
+                    const data = JSON.parse(raw);
+                    if (data.完整课表 && data.metadata) {
+                        enterImportMode(data);
+                        return;
+                    }
+                } catch (_) {}
+                sessionStorage.removeItem('import_data');
+            }
+
             const resp = await fetch('/api/user', { credentials: 'include' });
             const data = await resp.json();
             if (!data.logged_in) {
-                window.location.href = '/';
+                window.location.href = '/login.html';
                 return;
             }
             userData = data;
@@ -103,7 +116,6 @@
                 isShareMode  = true;
                 shareWeekMin = data.share_week_from;
                 shareWeekMax = data.share_week_to;
-                // 分享模式：隐藏设置按钮，退出按钮改文字
                 document.getElementById('admin-btn').style.display = 'none';
                 document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
                 const expiry = new Date(data.share_expires_at).toLocaleDateString();
@@ -116,12 +128,35 @@
             }
         }
 
+        function enterImportMode(data) {
+            importMode     = true;
+            lastCourseData = data;
+            maxWeek        = data.metadata?.max_week || 20;
+            currentWeek    = data.metadata?.current_week || 1;
+
+            document.getElementById('admin-btn').style.display  = 'none';
+            document.getElementById('export-btn').style.display = 'none';
+            document.getElementById('username').textContent     = '导入预览';
+            document.getElementById('logout-btn').textContent   = '退出预览';
+            document.getElementById('current-week').textContent = `第${currentWeek}周`;
+
+            const banner = document.getElementById('share-banner');
+            banner.style.cssText = 'display:block;background:#fff7e6;color:#d46b08;padding:10px 14px;border-radius:4px;margin:10px 0;text-align:center;border:1px solid #ffd591';
+            banner.textContent = '📂 导入预览模式（只读）· 关闭标签页后需重新导入';
+
+            renderCourses(data);
+        }
+
         async function logout() {
-            await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-            window.location.href = '/';
+            sessionStorage.removeItem('import_data');
+            if (!importMode) {
+                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            }
+            window.location.href = '/login.html';
         }
 
         function changeWeek(delta) {
+            if (importMode) return;  // 导入模式只有单周数据
             if (currentWeek === 0) return;
             currentWeek += delta;
             const minW = isShareMode ? shareWeekMin : 1;
@@ -133,6 +168,7 @@
         }
 
         async function loadCourses() {
+            if (importMode) return;
             document.getElementById('timetable').innerHTML =
                 '<div style="grid-column:1/-1;padding:20px;text-align:center;color:#999">加载中...</div>';
             try {
@@ -141,11 +177,10 @@
 
                 if (data.error) {
                     document.getElementById('timetable').innerHTML =
-                        `<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">${data.error}</div>`;
+                        `<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">${esc(data.error)}</div>`;
                     return;
                 }
 
-                // 首次加载时，从响应更新周次和上限
                 if (data.metadata) {
                     if (currentWeek === 0) {
                         let w = data.metadata.current_week || 2;
@@ -166,11 +201,27 @@
                     document.getElementById('cache-warning').style.display = 'none';
                 }
 
+                lastCourseData = data;
+                if (!isShareMode) {
+                    document.getElementById('export-btn').style.display = '';
+                }
                 renderCourses(data);
             } catch (e) {
                 document.getElementById('timetable').innerHTML =
                     '<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">加载失败，请刷新重试</div>';
             }
+        }
+
+        function exportTimetable() {
+            if (!lastCourseData) return;
+            const json = JSON.stringify(lastCourseData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const a    = document.createElement('a');
+            a.href     = URL.createObjectURL(blob);
+            const dateStr = new Date().toISOString().slice(0, 10);
+            a.download = `课表_第${currentWeek}周_${dateStr}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
         }
 
         function renderCourses(data) {
@@ -181,6 +232,20 @@
             const weekOrder = ['1','2','3','4','5','6','0'];
             const table = document.getElementById('timetable');
 
+            // 节次对应时间；3、4节在2号教学楼/2号实训楼时间不同，此处两种均显示
+            const times = {
+                1:  '08:30-09:15',
+                2:  '09:20-10:05',
+                3:  '<span style="font-size:0.85em;line-height:1.6">2号楼<br>10:15-11:00<br><span style="opacity:0.55">其他<br>10:25-11:10</span></span>',
+                4:  '<span style="font-size:0.85em;line-height:1.6">2号楼<br>11:05-11:50<br><span style="opacity:0.55">其他<br>11:15-12:00</span></span>',
+                5:  '14:30-15:15',
+                6:  '15:25-16:10',
+                7:  '16:20-17:05',
+                8:  '17:15-18:00',
+                9:  '19:00-19:45',
+                10: '19:55-20:40',
+            };
+
             table.innerHTML = '<div class="cell header">节次</div>';
             weekOrder.forEach(day => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
@@ -188,23 +253,17 @@
                 table.innerHTML += `<div class="cell header">${weekMap[day]}<br><small>${dateStr}</small></div>`;
             });
 
-            const times = {
-                1:'08:30-09:15', 2:'09:20-10:05', 3:'10:25-11:10', 4:'11:15-12:00',
-                5:'14:30-15:20', 6:'15:25-16:10', 7:'16:20-17:05', 8:'17:10-18:00',
-                9:'19:00-19:45', 10:'19:55-20:40'
-            };
-
             const occupied = {};
 
             for (let slot = 1; slot <= 10; slot++) {
-                table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-size:0.7em;font-weight:normal">${times[slot]}</small></div>`;
+                table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
 
                 weekOrder.forEach(day => {
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
 
                     const dayData = data.完整课表.find(d => d.weekday === day);
-                    const course = dayData && dayData.courses.find(c => c.time_slots.start_slot === slot);
+                    const course  = dayData && dayData.courses.find(c => c.time_slots.start_slot === slot);
 
                     if (course) {
                         const duration = course.time_slots.duration;
@@ -226,8 +285,14 @@
             }
         }
 
-        checkAuth();
-        loadCourses();
+        async function init() {
+            await checkAuth();
+            if (!importMode) {
+                loadCourses();
+            }
+        }
+
+        init();
     </script>
 </body>
 </html>

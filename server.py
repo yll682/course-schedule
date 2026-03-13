@@ -219,8 +219,7 @@ threading.Thread(target=background_fetch, daemon=True).start()
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
-    if 'username' not in session:
-        return send_from_directory('.', 'login.html')
+    # 始终返回 index.html；认证检查由前端 JS 处理（支持导入预览模式）
     return send_from_directory('.', 'index.html')
 
 
@@ -539,19 +538,30 @@ def share_create():
 
 @app.route('/api/share/list', methods=['GET'])
 def share_list():
-    """列出当前用户的所有有效分享码"""
+    """列出分享码；管理员加 ?all=1 可查看所有用户"""
     if 'username' not in session:
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
+    is_admin = session.get('is_admin', False)
+    show_all = is_admin and request.args.get('all') == '1'
     now      = datetime.now().isoformat()
+
     with _db() as conn:
         c = conn.cursor()
-        c.execute(
-            'SELECT token, week_from, week_to, expires_at, created_at '
-            'FROM share_tokens WHERE owner=? AND revoked=0 ORDER BY created_at DESC',
-            (username,),
-        )
+        if show_all:
+            c.execute(
+                'SELECT st.token, st.week_from, st.week_to, st.expires_at, st.created_at, '
+                '       st.owner, u.jw_name '
+                'FROM share_tokens st LEFT JOIN users u ON st.owner = u.username '
+                'WHERE st.revoked=0 ORDER BY st.created_at DESC',
+            )
+        else:
+            c.execute(
+                'SELECT token, week_from, week_to, expires_at, created_at, owner, NULL '
+                'FROM share_tokens WHERE owner=? AND revoked=0 ORDER BY created_at DESC',
+                (username,),
+            )
         rows = c.fetchall()
 
     return jsonify({'tokens': [
@@ -561,6 +571,8 @@ def share_list():
             'week_to':    r[2],
             'expires_at': r[3],
             'created_at': r[4],
+            'owner':      r[5],
+            'owner_name': r[6] or r[5],
             'expired':    r[3] < now,
         }
         for r in rows
@@ -569,19 +581,22 @@ def share_list():
 
 @app.route('/api/share/revoke', methods=['POST'])
 def share_revoke():
-    """撤销分享码"""
+    """撤销分享码；管理员可撤销任意码"""
     if 'username' not in session:
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
+    is_admin = session.get('is_admin', False)
     token    = (request.json or {}).get('token', '').strip().upper()
 
     with _db() as conn:
         c = conn.cursor()
         c.execute('SELECT owner FROM share_tokens WHERE token=?', (token,))
         row = c.fetchone()
-        if not row or row[0] != username:
-            return jsonify({'error': '分享码不存在或无权撤销'}), 404
+        if not row:
+            return jsonify({'error': '分享码不存在'}), 404
+        if not is_admin and row[0] != username:
+            return jsonify({'error': '无权撤销此分享码'}), 403
         conn.execute('UPDATE share_tokens SET revoked=1 WHERE token=?', (token,))
         conn.commit()
 

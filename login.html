@@ -52,6 +52,14 @@
         .share-input button {
             width: auto; margin: 0; padding: 12px 16px; white-space: nowrap;
         }
+        .file-label {
+            display: block; margin-top: 12px; padding: 12px;
+            border: 1px dashed light-dark(#ddd, #555);
+            border-radius: 4px; text-align: center; cursor: pointer;
+            color: light-dark(#888, #aaa); font-size: 14px; transition: border-color 0.2s;
+        }
+        .file-label:hover { border-color: light-dark(#1890ff, #40a9ff); color: light-dark(#1890ff, #40a9ff); }
+        .file-label input[type="file"] { display: none; }
     </style>
 </head>
 <body>
@@ -66,6 +74,12 @@
             <button onclick="enterShare()">查看</button>
         </div>
         <div class="error" id="error"></div>
+        <div class="divider">或导入课表文件</div>
+        <label class="file-label">
+            <input type="file" id="import-file" accept=".json" onchange="importFile(event)">
+            📂 选择课表 JSON 文件查看
+        </label>
+        <div style="font-size:0.78rem;color:#aaa;margin-top:6px;text-align:center">关闭标签页后需重新导入</div>
     </div>
     <script>
         async function login() {
@@ -124,6 +138,28 @@
             } catch (e) {
                 error.textContent = '网络错误';
             }
+        }
+
+        function importFile(event) {
+            const file  = event.target.files[0];
+            const error = document.getElementById('error');
+            if (!file) return;
+            error.textContent = '';
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!data.完整课表 || !data.metadata) {
+                        error.textContent = '文件格式无效，请导入有效的课表 JSON';
+                        return;
+                    }
+                    sessionStorage.setItem('import_data', e.target.result);
+                    window.location.href = '/';
+                } catch (_) {
+                    error.textContent = '文件解析失败，请确认是有效的课表 JSON 文件';
+                }
+            };
+            reader.readAsText(file, 'utf-8');
         }
     </script>
 </body>
