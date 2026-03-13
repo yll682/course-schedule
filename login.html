@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 课程表</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            margin: 0; padding: 0; height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            background: light-dark(#f5f5f5, #1a1a1a);
+            color: light-dark(#333, #e0e0e0);
+        }
+        .login-box {
+            background: light-dark(white, #2d2d2d);
+            padding: 40px; border-radius: 8px;
+            width: 90%; max-width: 400px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; margin: 0 0 30px; }
+        input {
+            width: 100%; padding: 12px; margin: 10px 0;
+            border: 1px solid light-dark(#ddd, #555);
+            border-radius: 4px;
+            background: light-dark(white, #3a3a3a);
+            color: inherit; font-size: 16px;
+        }
+        button {
+            width: 100%; padding: 12px; margin-top: 20px;
+            border: none; border-radius: 4px;
+            background: light-dark(#1890ff, #0d5aa7);
+            color: white; font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover { opacity: 0.9; }
+        .error { color: #ff4d4f; margin-top: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>📚 课程表登录</h1>
+        <input type="text" id="username" placeholder="学号" autofocus>
+        <input type="password" id="password" placeholder="密码">
+        <button onclick="login()">登录</button>
+        <div class="error" id="error"></div>
+    </div>
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const error = document.getElementById('error');
+
+            if (!username || !password) {
+                error.textContent = '请输入学号和密码';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    error.textContent = data.message || '登录失败';
+                }
+            } catch (e) {
+                error.textContent = '网络错误';
+            }
+        }
+
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>

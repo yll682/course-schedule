@@ -9,7 +9,16 @@
       "Bash(cd \"E:\\\\Projects\\\\课程表\" && python -c \"from dotenv import load_dotenv; import os; load_dotenv\\(\\); print\\(os.getenv\\('JW_USERNAME'\\)\\)\")",
       "Bash(cd \"E:\\\\Projects\\\\课程表\" && python -c \"\nfrom course_sync import CourseClient\nimport logging\nlogging.basicConfig\\(level=logging.DEBUG\\)\nclient = CourseClient\\(\\)\nprint\\(f'Base URL: {client.base_url}'\\)\nprint\\(f'Username: {client.username}'\\)\nresult = client.login\\(\\)\nprint\\(f'Login result: {result}'\\)\n\")",
       "Bash(cd \"E:\\\\Projects\\\\课程表\" && rm course_sync.py requirements.txt .env sync_and_push.sh sync_and_push.bat create_repo.bat SETUP.md)",
-      "Bash(cd \"E:\\\\Projects\\\\课程表\" && python sync.py)"
+      "Bash(cd \"E:\\\\Projects\\\\课程表\" && python sync.py)",
+      "Bash(cd \"E:\\\\Projects\\\\课程表\" && start index.html)",
+      "Bash(start http://localhost:8000/index.html)",
+      "Bash(cd \"E:\\\\Projects\\\\课程表\" && python -m http.server 8000)",
+      "Bash(start http://localhost:8000)",
+      "Bash(cd \"E:\\\\Projects\\\\课程表\" && pip install -r requirements.txt)",
+      "Bash(cd \"E:\\\\Projects\\\\课程表\" && python server.py)",
+      "Bash(start http://localhost:5000)",
+      "Bash(curl -X POST http://59.57.242.167:81/njwsjd/api/login -H \"Content-Type: application/json\" -d '{\"username\":\"test\",\"password\":\"test\"}' 2>&1 | head -20)",
+      "Bash(playwright install:*)"
     ]
   }
 }
