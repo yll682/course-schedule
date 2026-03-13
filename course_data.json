@@ -1,0 +1,265 @@
+{
+  "metadata": {
+    "提取时间": "2026-03-14T00:25:02.539359",
+    "数据来源": "http://59.57.242.167:81/njwsjd/#/new/Table",
+    "用户": "郑霖轩 (2405309121)",
+    "班级": "制药3241",
+    "周次": "第2周",
+    "校区": "翔安校区"
+  },
+  "时间结构说明": {
+    "总节数": 12,
+    "每节高度_px": 65.5,
+    "课程高度规则": {
+      "单节课": "131px (2个时间块)",
+      "两节连上": "196.5px (3个时间块)",
+      "三节连上": "262px (4个时间块)"
+    },
+    "节次计算": "节次 = (margin-top ÷ 65.5) + 1"
+  },
+  "完整课表": [
+    {
+      "weekday": "Sunday",
+      "weekday_cn": "周日",
+      "date": "2026-03-09",
+      "courses": [
+        {
+          "course_name": "就业指导",
+          "teacher": "郭玉涵",
+          "location": "翔教1201",
+          "time_slots": {
+            "start_slot": 3,
+            "end_slot": 4,
+            "duration": 2,
+            "display": "3-4节",
+            "time_range": "未知"
+          },
+          "position": {
+            "margin_top": 131,
+            "height": 131,
+            "top_px": 287
+          },
+          "raw_text": "就业指导-郭玉涵@翔教1201-"
+        }
+      ]
+    },
+    {
+      "weekday": "monday",
+      "weekday_cn": "周一",
+      "date": "2026-03-10",
+      "courses": [
+        {
+          "course_name": "生物分离纯化技术",
+          "teacher": "钱崇祯",
+          "location": "翔教1204",
+          "time_slots": {
+            "start_slot": 1,
+            "end_slot": 2,
+            "duration": 2,
+            "display": "1-2节",
+            "time_range": "08:00-09:40"
+          },
+          "position": {
+            "margin_top": 0,
+            "height": 131,
+            "top_px": 156
+          },
+          "raw_text": "生物分离纯化技术-钱崇祯@翔教1204-"
+        },
+        {
+          "course_name": "生物分离工程及设备",
+          "teacher": "洪专",
+          "location": "翔教2101",
+          "time_slots": {
+            "start_slot": 7,
+            "end_slot": 9,
+            "duration": 3,
+            "display": "7-9节",
+            "time_range": "14:00-16:30"
+          },
+          "position": {
+            "margin_top": 393,
+            "height": 196.5,
+            "top_px": 549
+          },
+          "raw_text": "生物分离工程及设备-洪专@翔教2101-",
+          "note": "两节连上"
+        }
+      ]
+    },
+    {
+      "weekday": "Tuesday",
+      "weekday_cn": "周二",
+      "date": "2026-03-11",
+      "courses": [
+        {
+          "course_name": "药品生物检定技术",
+          "teacher": "夏宇宙",
+          "location": "翔教1302",
+          "time_slots": {
+            "start_slot": 1,
+            "end_slot": 2,
+            "duration": 2,
+            "display": "1-2节",
+            "time_range": "08:00-09:40"
+          },
+          "position": {
+            "margin_top": 0,
+            "height": 131,
+            "top_px": 156
+          },
+          "raw_text": "药品生物检定技术-夏宇宙@翔教1302-"
+        },
+        {
+          "course_name": "食品感官检验技术",
+          "teacher": "童彩玲",
+          "location": "翔教2102",
+          "time_slots": {
+            "start_slot": 5,
+            "end_slot": 6,
+            "duration": 2,
+            "display": "5-6节",
+            "time_range": "10:00-11:40"
+          },
+          "position": {
+            "margin_top": 262,
+            "height": 131,
+            "top_px": 418
+          },
+          "raw_text": "食品感官检验技术-童彩玲@翔教2102-"
+        },
+        {
+          "course_name": "海洋药物资源开发与利用",
+          "teacher": "童彩玲,倪辉",
+          "location": "翔教2102",
+          "time_slots": {
+            "start_slot": 7,
+            "end_slot": 8,
+            "duration": 2,
+            "display": "7-8节",
+            "time_range": "14:00-15:40"
+          },
+          "position": {
+            "margin_top": 393,
+            "height": 131,
+            "top_px": 549
+          },
+          "raw_text": "海洋药物资源开发与利用-童彩玲,倪辉@翔教2102-"
+        }
+      ]
+    },
+    {
+      "weekday": "Wednesday",
+      "weekday_cn": "周三",
+      "date": "2026-03-12",
+      "courses": [
+        {
+          "course_name": "药物分析检测技术",
+          "teacher": "关燕云",
+          "location": "翔教1205",
+          "time_slots": {
+            "start_slot": 5,
+            "end_slot": 6,
+            "duration": 2,
+            "display": "5-6节",
+            "time_range": "10:00-11:40"
+          },
+          "position": {
+            "margin_top": 262,
+            "height": 131,
+            "top_px": 418
+          },
+          "raw_text": "药物分析检测技术-关燕云@翔教1205-"
+        }
+      ]
+    },
+    {
+      "weekday": "Thursday",
+      "weekday_cn": "周四",
+      "date": "2026-03-13",
+      "courses": [
+        {
+          "course_name": "药物分析检测技术",
+          "teacher": "关燕云",
+          "location": "翔教2105",
+          "time_slots": {
+            "start_slot": 1,
+            "end_slot": 2,
+            "duration": 2,
+            "display": "1-2节",
+            "time_range": "08:00-09:40"
+          },
+          "position": {
+            "margin_top": 0,
+            "height": 131,
+            "top_px": 156
+          },
+          "raw_text": "药物分析检测技术-关燕云@翔教2105-"
+        }
+      ]
+    },
+    {
+      "weekday": "Friday",
+      "weekday_cn": "周五",
+      "date": "2026-03-14",
+      "courses": [
+        {
+          "course_name": "生物分离工程及设备",
+          "teacher": "洪专",
+          "location": "未知",
+          "time_slots": {
+            "start_slot": 1,
+            "end_slot": 3,
+            "duration": 3,
+            "display": "1-3节",
+            "time_range": "08:00-10:30"
+          },
+          "position": {
+            "margin_top": 0,
+            "height": 196.5,
+            "top_px": 156
+          },
+          "raw_text": "生物分离工程及设备-洪专@-",
+          "note": "两节连上，地点未指定"
+        }
+      ]
+    },
+    {
+      "weekday": "Saturday",
+      "weekday_cn": "周六",
+      "date": "2026-03-15",
+      "courses": []
+    }
+  ],
+  "统计信息": {
+    "总课程数": 9,
+    "按星期分布": {
+      "周日": 1,
+      "周一": 2,
+      "周二": 3,
+      "周三": 1,
+      "周四": 1,
+      "周五": 1,
+      "周六": 0
+    },
+    "按节次分布": {
+      "1-2节": 3,
+      "3-4节": 1,
+      "5-6节": 2,
+      "7-8节": 2,
+      "7-9节": 1,
+      "1-3节": 1
+    },
+    "连上课情况": {
+      "单节课": 7,
+      "两节连上": 2,
+      "三节连上": 0
+    }
+  },
+  "技术实现要点": {
+    "节次提取算法": "根据margin-top和height计算具体节次",
+    "时间映射": "65.5px = 1节课，需考虑连上课情况",
+    "星期顺序": "一 二 三 四 五 六 日（系统显示顺序）",
+    "周次逻辑": "工作日取本周，周末取下周"
+  }
+}

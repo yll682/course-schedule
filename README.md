@@ -1,13 +1,25 @@
-# 第三方课表客户端
+# 课表同步
 
-自动同步教务系统课表到GitHub
+## 部署
+```bash
+git clone https://github.com/yll682/course-schedule.git
+cd course-schedule
+```
 
-## 使用方法
+## 运行
+```bash
+python3 sync.py
+bash deploy.sh  # 自动推送
+```
 
-1. 安装依赖：`pip install -r requirements.txt`
-2. 运行同步：`python course_sync.py`
-3. 自动推送：`bash sync_and_push.sh`
+## 定时任务
+```bash
+crontab -e
+# 每5分钟同步
+*/5 * * * * cd /path/to/course-schedule && bash deploy.sh
+```
 
-## 配置
-
-编辑 `.env` 文件设置账号密码
+## 移除
+```bash
+cd .. && rm -rf course-schedule
+```
