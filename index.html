@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>课程表</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1890ff">
+    <link rel="apple-touch-icon" href="/icon.svg">
     <style>
         :root {
             --c-bg:       #f5f5f5;
@@ -357,6 +360,9 @@
             if (!importMode) loadCourses();
         }
         init();
+    </script>
+    <script>
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
     </script>
 </body>
 </html>
