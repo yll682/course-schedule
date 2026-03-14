@@ -24,11 +24,13 @@
 
 **要求：** Debian / Ubuntu，root 权限
 
+国际线路：
 ```bash
-# 国际线路
 bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
+```
 
-# 国内线路（EdgeOne 加速）
+国内线路（EdgeOne 加速）：
+```bash
 bash <(curl -fsSL https://edgeone.gh-proxy.org/https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 ```
 
