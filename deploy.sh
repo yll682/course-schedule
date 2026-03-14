@@ -176,7 +176,7 @@ setup_env() {
 SECRET_KEY=${secret_key}
 PORT=${PORT}
 FLASK_DEBUG=false
-DB_FILE=${APP_DIR}/courses.db
+DB_FILE=${APP_DIR}/data/courses.db
 EOF
     chmod 600 "$env_file"
     ok ".env 已生成（SECRET_KEY 随机生成）"
@@ -217,10 +217,12 @@ WantedBy=multi-user.target
 EOF
     chown root:root "$APP_DIR"
     chmod 755 "$APP_DIR"
-    # courseapp 只需要写 .env 和数据库，其余只读即可
+    # 单独的数据目录：courseapp 需要读写 db 及 WAL 旁文件
+    mkdir -p "$APP_DIR/data"
+    chown "$APP_USER:$APP_USER" "$APP_DIR/data"
+    chmod 750 "$APP_DIR/data"
+    # .env 也由 courseapp 读取
     chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
-    touch "$APP_DIR/courses.db"
-    chown "$APP_USER:$APP_USER" "$APP_DIR/courses.db"
     systemctl daemon-reload
     systemctl enable --quiet "$SERVICE_NAME"
     systemctl restart "$SERVICE_NAME"
