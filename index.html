@@ -150,7 +150,8 @@
     <div class="container">
         <div class="page-header">
             <div class="header-side">
-                <span class="side-label" id="username"></span>
+                <span class="side-label" id="today-date"></span>
+                <button class="icon-btn" id="back-week-btn" onclick="goCurrentWeek()" title="回本周" style="display:none">↩</button>
             </div>
             <h1>📚 课程表</h1>
             <div class="header-side right">
@@ -214,6 +215,7 @@
         });
 
         let currentWeek = 0;
+        let realCurrentWeek = 0;
         let maxWeek = 20;
         let shareWeekMin = 1, shareWeekMax = 20;
         let isShareMode  = false;
@@ -280,7 +282,7 @@
                         document.getElementById('settings-btn').style.display = 'none';
                         const exitBtn = document.getElementById('exit-btn');
                         exitBtn.style.display = ''; exitBtn.textContent = '退出';
-                        document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
+
                         const expiry = new Date(data.share_expires_at).toLocaleDateString();
                         const banner = document.getElementById('share-banner');
                         banner.style.display = 'block';
@@ -331,7 +333,6 @@
                 document.getElementById('settings-btn').style.display = 'none';
                 const exitBtn = document.getElementById('exit-btn');
                 exitBtn.style.display = ''; exitBtn.textContent = '退出';
-                document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
                 const expiry = new Date(data.share_expires_at).toLocaleDateString();
                 const banner = document.getElementById('share-banner');
                 banner.style.display = 'block';
@@ -339,7 +340,7 @@
                 return;
             }
 
-            document.getElementById('username').textContent = data.name || data.username;
+
 
             if (adminViewUser && data.is_admin) {
                 adminViewMode = true;
@@ -377,7 +378,7 @@
             document.getElementById('settings-btn').style.display = 'none';
             const exitBtn = document.getElementById('exit-btn');
             exitBtn.style.display = ''; exitBtn.textContent = '退出预览';
-            document.getElementById('username').textContent = '导入预览';
+
             document.getElementById('current-week').textContent = `第${currentWeek}周`;
             renderCourses(importWeeksMap[currentWeek]);
         }
@@ -408,7 +409,33 @@
             if (currentWeek < minW) currentWeek = minW;
             if (currentWeek > maxW) currentWeek = maxW;
             document.getElementById('current-week').textContent = `第${currentWeek}周`;
+            updateBackWeekBtn();
             loadCourses();
+        }
+
+        function goCurrentWeek() {
+            if (!realCurrentWeek || currentWeek === realCurrentWeek) return;
+            currentWeek = realCurrentWeek;
+            document.getElementById('current-week').textContent = `第${currentWeek}周`;
+            updateBackWeekBtn();
+            loadCourses();
+        }
+
+        function updateBackWeekBtn() {
+            const btn = document.getElementById('back-week-btn');
+            const dateEl = document.getElementById('today-date');
+            if (!btn) return;
+            const notCurrent = realCurrentWeek && currentWeek !== realCurrentWeek;
+            btn.style.display = notCurrent ? '' : 'none';
+            if (dateEl) {
+                if (notCurrent) {
+                    dateEl.style.display = 'none';
+                } else {
+                    const now = new Date();
+                    dateEl.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
+                    dateEl.style.display = '';
+                }
+            }
         }
 
         async function loadCourses() {
@@ -434,8 +461,10 @@
                         if (isShareMode) w = Math.max(shareWeekMin, Math.min(shareWeekMax, w));
                         currentWeek = w;
                     }
+                    if (data.metadata.current_week) realCurrentWeek = data.metadata.current_week;
                     if (data.metadata.max_week) maxWeek = data.metadata.max_week;
                     document.getElementById('current-week').textContent = `第${currentWeek}周`;
+                    updateBackWeekBtn();
                 }
 
                 const w = document.getElementById('cache-warning');
