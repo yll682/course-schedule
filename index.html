@@ -93,13 +93,13 @@
         .timetable {
             display: grid;
             grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
-            grid-auto-rows: 62px;
+            grid-template-rows: 62px 62px 62px 62px 62px 3px 62px 62px 62px 62px 3px 62px 62px;
             gap: 1px;
             background: var(--c-grid);
             border: 1px solid var(--c-grid);
             min-width: 556px;
         }
-        .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; }
+        .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; z-index: 1; }
         .header {
             background: var(--c-primary);
             color: white; font-weight: bold; text-align: center;
@@ -111,11 +111,6 @@
         .course-info { opacity: 0.8; font-size: clamp(0.60rem, 1.6vw, 0.68rem); line-height: 1.4; }
         .course { cursor: pointer; }
         .course:active { filter: brightness(0.93); }
-        .cell.sep-before::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-            background: linear-gradient(to bottom, transparent 1px, var(--c-grid) 1px);
-            z-index: 1;
-        }
         @media (max-width: 768px) {
             .cell { padding: 4px; }
             .course { padding: 4px 5px; }
@@ -433,8 +428,7 @@
 
             const occupied = {};
             for (let slot = 1; slot <= 10; slot++) {
-                const sep = (slot === 5 || slot === 9) ? ' sep-before' : '';
-                table.innerHTML += `<div class="cell time-slot${sep}">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
+                table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
                 weekOrder.forEach(day => {
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
@@ -445,8 +439,11 @@
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         window._courseMap[key] = course;
                         const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
+                        let gridSpan = duration;
+                        if (slot <= 4 && slot + duration - 1 >= 5) gridSpan++;
+                        if (slot <= 8 && slot + duration - 1 >= 9) gridSpan++;
                         table.innerHTML += `
-                            <div class="cell${sep}" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
+                            <div class="cell" style="grid-row: span ${Math.max(1, Math.min(12, gridSpan))}">
                                 <div class="course" data-key="${esc(key)}">
                                     <div class="course-name">${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
@@ -455,9 +452,12 @@
                                 </div>
                             </div>`;
                     } else {
-                        table.innerHTML += `<div class="cell${sep}"></div>`;
+                        table.innerHTML += '<div class="cell"></div>';
                     }
                 });
+                if (slot === 4 || slot === 8) {
+                    table.innerHTML += '<div style="grid-column: 1 / -1; background: var(--c-surface);"></div>';
+                }
             }
         }
 
