@@ -186,41 +186,45 @@ def fetch_from_jw(username: str, week: int) -> dict:
 # ── 后台定时抓取 ──────────────────────────────────────────────────────────────
 def background_fetch():
     while True:
+        try:
+            with _db() as conn:
+                c = conn.cursor()
+                c.execute('SELECT username FROM users WHERE password_enc IS NOT NULL')
+                users = [row[0] for row in c.fetchall()]
+
+            for username in users:
+                try:
+                    data = fetch_from_jw(username, 0)
+                    current_week = data['metadata']['current_week']
+                    max_week     = data['metadata']['max_week']
+
+                    with _db() as conn:
+                        conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                     (username, current_week,
+                                      json.dumps(data, ensure_ascii=False),
+                                      datetime.now().isoformat()))
+                        conn.commit()
+
+                    for w in [current_week - 1, current_week + 1]:
+                        if 1 <= w <= max_week:
+                            try:
+                                d = fetch_from_jw(username, w)
+                                with _db() as conn:
+                                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                                 (username, w,
+                                                  json.dumps(d, ensure_ascii=False),
+                                                  datetime.now().isoformat()))
+                                    conn.commit()
+                            except Exception as e:
+                                logger.warning('后台抓取失败 user=%s week=%d: %s', username, w, e)
+                except Exception as e:
+                    logger.error('后台抓取失败 user=%s: %s', username, e)
+
+        except Exception as e:
+            logger.error('后台定时任务异常: %s', e)
+
         interval = get_setting('fetch_interval', 60) * 60
         time_module.sleep(interval)
-
-        with _db() as conn:
-            c = conn.cursor()
-            c.execute('SELECT username FROM users WHERE password_enc IS NOT NULL')
-            users = [row[0] for row in c.fetchall()]
-
-        for username in users:
-            try:
-                data = fetch_from_jw(username, 0)
-                current_week = data['metadata']['current_week']
-                max_week     = data['metadata']['max_week']
-
-                with _db() as conn:
-                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
-                                 (username, current_week,
-                                  json.dumps(data, ensure_ascii=False),
-                                  datetime.now().isoformat()))
-                    conn.commit()
-
-                for w in [current_week - 1, current_week + 1]:
-                    if 1 <= w <= max_week:
-                        try:
-                            d = fetch_from_jw(username, w)
-                            with _db() as conn:
-                                conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
-                                             (username, w,
-                                              json.dumps(d, ensure_ascii=False),
-                                              datetime.now().isoformat()))
-                                conn.commit()
-                        except Exception as e:
-                            logger.warning('后台抓取失败 user=%s week=%d: %s', username, w, e)
-            except Exception as e:
-                logger.error('后台抓取失败 user=%s: %s', username, e)
 
 
 threading.Thread(target=background_fetch, daemon=True).start()
