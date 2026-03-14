@@ -5,12 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>设置 - 课程表</title>
     <style>
+        :root {
+            --c-bg:              #f5f5f5;
+            --c-surface:         #ffffff;
+            --c-input:           #ffffff;
+            --c-hover:           #f5f5f5;
+            --c-disabled-bg:     #fafafa;
+            --c-text:            #333333;
+            --c-muted:           #999999;
+            --c-disabled-text:   #bbbbbb;
+            --c-border:          #dddddd;
+            --c-border-input:    #d9d9d9;
+            --c-border-soft:     #f0f0f0;
+            --c-primary:         #1890ff;
+            --c-primary-dark:    #0d5aa7;
+            --c-badge-user-bg:   #f0f5ff;
+            --c-badge-user-text: #2f54eb;
+            --c-badge-user-bdr:  #adc6ff;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --c-bg:              #1a1a1a;
+                --c-surface:         #2d2d2d;
+                --c-input:           #3a3a3a;
+                --c-hover:           #444444;
+                --c-disabled-bg:     #2a2a2a;
+                --c-text:            #e0e0e0;
+                --c-muted:           #888888;
+                --c-disabled-text:   #666666;
+                --c-border:          #444444;
+                --c-border-input:    #555555;
+                --c-border-soft:     #3a3a3a;
+                --c-primary:         #0d5aa7;
+                --c-primary-dark:    #0d5aa7;
+                --c-badge-user-bg:   #1a1f3a;
+                --c-badge-user-text: #85a5ff;
+                --c-badge-user-bdr:  #2f54eb;
+            }
+        }
         * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
             margin: 0; padding: 20px;
-            background: light-dark(#f5f5f5, #1a1a1a);
-            color: light-dark(#333, #e0e0e0);
+            background: var(--c-bg);
+            color: var(--c-text);
         }
         .container { max-width: 700px; margin: 0 auto; }
         /* ── 顶栏 ── */
@@ -19,71 +57,79 @@
             margin-bottom: 20px;
         }
         .page-title { margin: 0; font-size: 1.25rem; flex: 1; }
-        .user-label { font-size: 0.85rem; color: #999; white-space: nowrap; }
+        .user-label { font-size: 0.85rem; color: var(--c-muted); white-space: nowrap; }
         /* ── 卡片 ── */
         .card {
-            background: light-dark(white, #2d2d2d);
+            background: var(--c-surface);
             border-radius: 8px; padding: 20px; margin-bottom: 16px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
         .card-header {
             display: flex; align-items: center; gap: 10px;
             margin-bottom: 16px; padding-bottom: 10px;
-            border-bottom: 1px solid light-dark(#f0f0f0, #444);
+            border-bottom: 1px solid var(--c-border-soft);
         }
         .card-header h2 { margin: 0; font-size: 0.95rem; }
         .badge {
             font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
         }
         .badge-admin { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
-        .badge-user  { background: light-dark(#f0f5ff,#1a1f3a); color: light-dark(#2f54eb,#85a5ff); border: 1px solid light-dark(#adc6ff,#2f54eb); }
+        .badge-user  {
+            background: var(--c-badge-user-bg);
+            color: var(--c-badge-user-text);
+            border: 1px solid var(--c-badge-user-bdr);
+        }
         /* ── 字段 ── */
         .field { margin-bottom: 14px; }
         .field label { display: block; font-size: 0.88rem; font-weight: 500; margin-bottom: 5px; }
-        .field .hint { font-size: 0.76rem; color: #999; margin-top: 4px; }
+        .field .hint { font-size: 0.76rem; color: var(--c-muted); margin-top: 4px; }
         .field input, .field select {
             width: 100%; padding: 8px 11px;
-            border: 1px solid light-dark(#d9d9d9, #555); border-radius: 6px;
-            background: light-dark(white, #3a3a3a); color: inherit; font-size: 0.92rem;
+            border: 1px solid var(--c-border-input); border-radius: 6px;
+            background: var(--c-input); color: var(--c-text); font-size: 0.92rem;
         }
-        .field input:disabled { background: light-dark(#fafafa,#2a2a2a); color: light-dark(#bbb,#666); cursor: not-allowed; }
+        .field input:disabled {
+            background: var(--c-disabled-bg);
+            color: var(--c-disabled-text);
+            cursor: not-allowed;
+        }
         /* ── 按钮 ── */
         .actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
         .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
-        .btn-primary { background: light-dark(#1890ff,#0d5aa7); color: white; }
+        .btn-primary { background: var(--c-primary); color: white; }
         .btn-primary:hover { opacity: 0.85; }
         .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
         .btn-default {
-            background: light-dark(white,#3a3a3a); color: inherit;
-            border: 1px solid light-dark(#d9d9d9,#555);
+            background: var(--c-input); color: var(--c-text);
+            border: 1px solid var(--c-border-input);
         }
-        .btn-default:hover { background: light-dark(#f5f5f5,#444); }
+        .btn-default:hover { background: var(--c-hover); }
         .btn-danger { color: #ff4d4f; border-color: #ffa39e; }
         .btn-danger:hover { background: #fff1f0; }
         .save-status { font-size: 0.82rem; color: #52c41a; display: none; }
         .save-status.show { display: inline; }
         /* ── 分隔 ── */
-        .section-title { font-size: 0.82rem; color: #999; margin: 14px 0 8px; }
-        /* ── 分享码列表项 ── */
+        .section-title { font-size: 0.82rem; color: var(--c-muted); margin: 14px 0 8px; }
+        /* ── 列表项 ── */
         .token-row {
             display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
             padding: 8px 10px;
-            border: 1px solid light-dark(#f0f0f0,#3a3a3a);
+            border: 1px solid var(--c-border-soft);
             border-radius: 6px; margin-bottom: 6px;
         }
-        /* ── 用户列表项 ── */
         .user-row {
-            padding: 10px; border: 1px solid light-dark(#f0f0f0,#3a3a3a);
+            padding: 10px; border: 1px solid var(--c-border-soft);
             border-radius: 6px; margin-bottom: 8px;
         }
         .user-row-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
         .week-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
         .week-chip {
-            padding: 2px 8px; font-size: 0.8rem; border: 1px solid light-dark(#d9d9d9,#555);
-            border-radius: 4px; cursor: pointer; background: light-dark(white,#3a3a3a);
-            color: inherit;
+            padding: 2px 8px; font-size: 0.8rem;
+            border: 1px solid var(--c-border-input);
+            border-radius: 4px; cursor: pointer;
+            background: var(--c-input); color: var(--c-text);
         }
-        .week-chip:hover { background: light-dark(#e6f4ff,#1a3a4a); border-color: #1890ff; color: #1890ff; }
+        .week-chip:hover { background: #e6f4ff; border-color: #1890ff; color: #1890ff; }
     </style>
 </head>
 <body>
@@ -106,7 +152,7 @@
                 <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出整学期课表</button>
                 <button class="btn btn-default btn-danger" onclick="doLogout()">退出登录</button>
             </div>
-            <div id="export-status" style="font-size:0.82rem;color:#999;margin-top:8px;display:none"></div>
+            <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
         </div>
 
         <!-- ── 分享码（所有用户）── -->
@@ -139,7 +185,7 @@
             </div>
 
             <!-- 生成结果 -->
-            <div id="share-result" style="display:none;background:light-dark(#f6ffed,#162312);border:1px solid light-dark(#b7eb8f,#274916);border-radius:6px;padding:12px;margin-bottom:14px">
+            <div id="share-result" style="display:none;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;padding:12px;margin-bottom:14px">
                 <div style="font-size:0.82rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成，发给对方即可</div>
                 <div style="display:flex;align-items:center;gap:8px">
                     <code id="share-result-code" style="font-size:1.25rem;letter-spacing:4px;font-weight:bold"></code>
@@ -170,7 +216,7 @@
             </div>
 
             <!-- 分享码管理 -->
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid light-dark(#f0f0f0,#444)">
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
                 <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">分享码管理</div>
                 <div id="admin-share-list">加载中...</div>
             </div>
@@ -182,7 +228,7 @@
                 <h2>用户课表</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
-            <div class="field hint" style="margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
+            <div style="font-size:0.8rem;color:var(--c-muted);margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
             <div id="users-list">加载中...</div>
         </div>
 
@@ -302,10 +348,8 @@
                 el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
                 return;
             }
-            const now = new Date().toISOString();
             el.innerHTML = data.tokens.map(t => {
-                const expired = t.expired;
-                const badge   = expired
+                const badge   = t.expired
                     ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
                     : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
                 const expStr  = new Date(t.expires_at).toLocaleString();
@@ -317,12 +361,12 @@
                     <span style="font-size:0.8rem;color:#999">至 ${expStr}</span>
                     ${badge}
                     <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="revokeShare('${esc(t.token)}', false)">撤销</button>
+                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
                 </div>`;
             }).join('');
         }
 
-        // ── 管理员：所有用户的分享码 ──────────────────────────────────────────
+        // ── 管理员：所有用户分享码 ──────────────────────────────────────────────
         async function loadAdminShares() {
             const resp = await fetch('/api/share/list?all=1', { credentials: 'include' });
             if (!resp.ok) return;
@@ -338,7 +382,6 @@
                     : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
                 const expStr  = new Date(t.expires_at).toLocaleString();
                 const created = new Date(t.created_at).toLocaleDateString();
-                // 计算有效天数
                 const days    = Math.round((new Date(t.expires_at) - new Date(t.created_at)) / 86400000);
                 const durStr  = days >= 160 ? '半年' : `${days}天`;
                 return `<div class="token-row">
@@ -349,7 +392,7 @@
                     <span style="font-size:0.78rem;color:#999">至 ${expStr}</span>
                     ${badge}
                     <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="revokeShare('${esc(t.token)}', true)">撤销</button>
+                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
                 </div>`;
             }).join('');
         }
@@ -385,7 +428,7 @@
             navigator.clipboard.writeText(code).then(() => alert(`已复制：${code}`));
         }
 
-        async function revokeShare(token, isAdminAction) {
+        async function revokeShare(token) {
             if (!confirm(`确认撤销分享码 ${token}？`)) return;
             await fetch('/api/share/revoke', {
                 method: 'POST',
