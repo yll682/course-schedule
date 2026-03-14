@@ -122,7 +122,14 @@ def get_setting(key, default):
         c = conn.cursor()
         c.execute('SELECT value FROM settings WHERE key=?', (key,))
         row = c.fetchone()
-    return int(row[0]) if row else default
+    if not row:
+        return default
+    if isinstance(default, int):
+        try:
+            return int(row[0])
+        except (ValueError, TypeError):
+            return default
+    return row[0]
 
 
 # ── Token 管理 ────────────────────────────────────────────────────────────────
