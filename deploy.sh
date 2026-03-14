@@ -147,6 +147,8 @@ create_user() {
 }
 
 setup_code() {
+    # Git 2.35+ 安全检查：root 操作其他用户所有的目录需要豁免
+    git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
         git -C "$APP_DIR" pull --ff-only
@@ -213,8 +215,12 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
-    chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+    chown root:root "$APP_DIR"
     chmod 755 "$APP_DIR"
+    # courseapp 只需要写 .env 和数据库，其余只读即可
+    chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
+    touch "$APP_DIR/courses.db"
+    chown "$APP_USER:$APP_USER" "$APP_DIR/courses.db"
     systemctl daemon-reload
     systemctl enable --quiet "$SERVICE_NAME"
     systemctl restart "$SERVICE_NAME"
