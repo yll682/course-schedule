@@ -3,11 +3,14 @@
 # 课程表 · 一键部署 (Debian / Ubuntu)
 #
 #   bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
+#
+#   国内加速：
+#   bash <(curl -fsSL https://edgeone.gh-proxy.org/https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 # =============================================================
 set -euo pipefail
 
 REPO_URL="https://github.com/yll682/course-schedule.git"
-REPO_URL_CN="https://ghproxy.com/https://github.com/yll682/course-schedule.git"
+REPO_URL_CN="https://edgeone.gh-proxy.org/https://github.com/yll682/course-schedule.git"
 APP_DIR="/opt/course-schedule"
 APP_USER="courseapp"
 SERVICE_NAME="course-schedule"
@@ -154,7 +157,7 @@ setup_code() {
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
         if ! git -C "$APP_DIR" pull --ff-only 2>/dev/null; then
-            info "直连失败，尝试 ghproxy 加速..."
+            info "直连失败，尝试 EdgeOne 加速..."
             git -C "$APP_DIR" remote set-url origin "$REPO_URL_CN"
             git -C "$APP_DIR" pull --ff-only
             git -C "$APP_DIR" remote set-url origin "$REPO_URL"
@@ -162,7 +165,7 @@ setup_code() {
     else
         info "克隆仓库..."
         if ! git clone "$REPO_URL" "$APP_DIR" 2>/dev/null; then
-            info "直连失败，尝试 ghproxy 加速..."
+            info "直连失败，尝试 EdgeOne 加速..."
             git clone "$REPO_URL_CN" "$APP_DIR"
         fi
     fi
@@ -223,30 +226,9 @@ setup_systemd() {
     fi
     # ── 以下原有逻辑 ───────────────────────────────────────────
     info "配置 systemd 服务..."
-[Unit]
-Description=课程表 Web 应用
-After=network.target
-
-[Service]
-Type=simple
-User=${APP_USER}
-WorkingDirectory=${APP_DIR}
-EnvironmentFile=${APP_DIR}/.env
-ExecStart=${APP_DIR}/.venv/bin/gunicorn \\
-    --workers 1 \\
-    --bind 127.0.0.1:\${PORT} \\
-    --timeout 60 \\
-    --access-logfile - \\
-    --error-logfile - \\
-    server:app
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    local svc_file="/etc/systemd/system/${SERVICE_NAME}.service"
+    printf '[Unit]\nDescription=课程表 Web 应用\nAfter=network.target\n\n[Service]\nType=simple\nUser=%s\nWorkingDirectory=%s\nEnvironmentFile=%s/.env\nExecStart=%s/.venv/bin/gunicorn \\\n    --workers 1 \\\n    --bind 127.0.0.1:${PORT} \\\n    --timeout 60 \\\n    --access-logfile - \\\n    --error-logfile - \\\n    server:app\nRestart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' \
+        "$APP_USER" "$APP_DIR" "$APP_DIR" "$APP_DIR" > "$svc_file"
     chown root:root "$APP_DIR"
     chmod 755 "$APP_DIR"
     # .env 也由 courseapp 读取
