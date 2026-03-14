@@ -89,28 +89,29 @@
         #current-week { font-size: 1rem; font-weight: 500; min-width: 64px; text-align: center; }
         /* ── 课表 ── */
         .meta { text-align: center; color: var(--c-muted); margin: 8px 0; font-size: clamp(0.72rem, 2vw, 0.88rem); }
+        .timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .timetable {
             display: grid;
-            grid-template-columns: minmax(46px, 62px) repeat(7, 1fr);
-            grid-auto-rows: minmax(50px, auto);
+            grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
+            grid-auto-rows: 62px;
             gap: 1px;
             background: var(--c-grid);
             border: 1px solid var(--c-grid);
-            overflow-x: auto;
+            min-width: 556px;
         }
-        .cell { background: var(--c-surface); padding: 6px; min-height: 50px; position: relative; }
+        .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; }
         .header {
             background: var(--c-primary);
             color: white; font-weight: bold; text-align: center;
-            padding: 8px; font-size: clamp(0.7rem, 2vw, 0.9rem);
+            padding: 8px; font-size: clamp(0.72rem, 2vw, 0.9rem);
         }
-        .time-slot { background: var(--c-subtle); font-size: clamp(0.62rem, 1.6vw, 0.78rem); text-align: center; font-weight: bold; }
-        .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 6px; font-size: clamp(0.7rem, 1.8vw, 0.85rem); height: 100%; }
-        .course-name { font-weight: bold; margin-bottom: 3px; }
-        .course-info { opacity: 0.8; font-size: clamp(0.65rem, 1.6vw, 0.75rem); line-height: 1.4; }
+        .time-slot { background: var(--c-subtle); font-size: clamp(0.65rem, 1.6vw, 0.78rem); text-align: center; font-weight: bold; }
+        .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.72rem, 1.8vw, 0.85rem); height: 100%; overflow: hidden; }
+        .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
+        .course-info { opacity: 0.8; font-size: clamp(0.67rem, 1.6vw, 0.75rem); line-height: 1.4; }
         @media (max-width: 768px) {
-            .timetable { font-size: 0.75rem; }
-            .cell { padding: 4px; min-height: 40px; }
+            .cell { padding: 4px; }
+            .course { padding: 4px 5px; }
         }
     </style>
 </head>
@@ -134,7 +135,7 @@
         <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:8px 0;text-align:center"></div>
         <div id="share-banner" style="display:none;background:#e6f4ff;color:#0958d9;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #91caff"></div>
         <div class="meta" id="meta"></div>
-        <div class="timetable" id="timetable"></div>
+        <div class="timetable-wrapper"><div class="timetable" id="timetable"></div></div>
     </div>
 
     <script>
@@ -350,7 +351,6 @@
                                     <div class="course-info">📍 ${esc(course.location)}</div>
                                     <div class="course-info">⏰ ${esc(course.time_slots.display)}</div>
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
-                                    ${course.weeks ? `<div class="course-info" style="opacity:0.6">${esc(course.weeks)}周</div>` : ''}
                                 </div>
                             </div>`;
                     } else {
