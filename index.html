@@ -243,8 +243,58 @@
         const _params = new URLSearchParams(window.location.search);
         adminViewUser = _params.get('as') || null;
         const _adminWeekParam = parseInt(_params.get('week') || '0', 10);
+        const _shareCode = _params.get('code'); // 分享码参数
+
+        // 处理分享码进入
+        async function tryShareCode() {
+            if (!_shareCode) return false;
+            const resp = await fetch('/api/share/enter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ token: _shareCode }),
+            });
+            const result = await resp.json();
+            if (result.success) {
+                // 清除 URL 中的 code 参数，避免刷新重复提交
+                const url = new URL(window.location);
+                url.searchParams.delete('code');
+                window.history.replaceState({}, '', url);
+                return true;
+            }
+            return false;
+        }
 
         async function checkAuth() {
+            // 如果有分享码参数，先尝试用分享码进入
+            if (_shareCode) {
+                const success = await tryShareCode();
+                if (success) {
+                    // 分享码验证成功，直接进入分享模式，不再检查账号登录
+                    const resp = await fetch('/api/user', { credentials: 'include' });
+                    const data = await resp.json();
+                    if (data.is_share_mode) {
+                        isShareMode  = true;
+                        shareWeekMin = data.share_week_from;
+                        shareWeekMax = data.share_week_to;
+                        document.getElementById('settings-btn').style.display = 'none';
+                        const exitBtn = document.getElementById('exit-btn');
+                        exitBtn.style.display = ''; exitBtn.textContent = '退出';
+                        document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
+                        const expiry = new Date(data.share_expires_at).toLocaleDateString();
+                        const banner = document.getElementById('share-banner');
+                        banner.style.display = 'block';
+                        banner.textContent = `👁 分享浏览模式（只读）· 第 ${shareWeekMin}~${shareWeekMax} 周 · 有效至 ${expiry}`;
+                        if (currentWeek === 0) currentWeek = shareWeekMin;
+                        document.getElementById('current-week').textContent = `第${currentWeek}周`;
+                        loadCourses();
+                        return;
+                    }
+                } else {
+                    alert('分享码无效或已过期');
+                }
+            }
+
             const raw = sessionStorage.getItem('import_data');
             if (raw) {
                 try {
@@ -260,7 +310,15 @@
 
             const resp = await fetch('/api/user', { credentials: 'include' });
             const data = await resp.json();
-            if (!data.logged_in) { window.location.href = '/login.html'; return; }
+            if (!data.logged_in) {
+                // 如果有分享码但未登录，跳转到登录页并带上分享码
+                if (_shareCode) {
+                    window.location.href = '/login.html?code=' + encodeURIComponent(_shareCode);
+                    return;
+                }
+                window.location.href = '/login.html';
+                return;
+            }
 
             if (data.slot34_special_pattern !== undefined) {
                 slot34SpecialPattern = data.slot34_special_pattern;

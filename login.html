@@ -109,6 +109,13 @@
         <div style="font-size:0.78rem;color:#aaa;margin-top:6px;text-align:center">关闭标签页后需重新导入</div>
     </div>
     <script>
+        // 检查 URL 参数中的分享码
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareCodeParam = urlParams.get('code');
+        if (shareCodeParam) {
+            document.getElementById('share-code').value = shareCodeParam.toUpperCase();
+        }
+
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -128,7 +135,12 @@
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    window.location.href = '/';
+                    // 如果有分享码参数，登录后跳转到首页（会自动处理分享码）
+                    if (shareCodeParam) {
+                        window.location.href = '/?code=' + encodeURIComponent(shareCodeParam);
+                    } else {
+                        window.location.href = '/';
+                    }
                 } else {
                     error.textContent = data.message || '登录失败';
                 }

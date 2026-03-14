@@ -191,10 +191,11 @@
 
             <!-- 生成结果 -->
             <div id="share-result" style="display:none;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;padding:12px;margin-bottom:14px">
-                <div style="font-size:0.82rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成，发给对方即可</div>
-                <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:0.82rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                     <code id="share-result-code" style="font-size:1.25rem;letter-spacing:4px;font-weight:bold"></code>
-                    <button class="btn btn-default" style="padding:4px 10px;font-size:0.8rem" onclick="copyCode()">复制</button>
+                    <button class="btn btn-default" style="padding:4px 10px;font-size:0.8rem" onclick="copyCode()">复制分享码</button>
+                    <button class="btn btn-primary" style="padding:4px 10px;font-size:0.8rem" onclick="copyShareLink()">复制分享链接</button>
                 </div>
                 <div id="share-result-info" style="font-size:0.78rem;color:#999;margin-top:4px"></div>
             </div>
@@ -398,22 +399,40 @@
                 el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
                 return;
             }
+            // 获取当前用户名用于分享文案
+            const userResp = await fetch('/api/user', { credentials: 'include' });
+            const userData = await userResp.json();
+            const myName = userData.name || userData.username || '我';
+
             el.innerHTML = data.tokens.map(t => {
                 const badge   = t.expired
                     ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
                     : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
                 const expStr  = new Date(t.expires_at).toLocaleString();
                 const created = new Date(t.created_at).toLocaleDateString();
+                const shareLink = `${window.location.origin}/?code=${t.token}`;
+                const shareText = `${myName}给你分享了自己的课程表，点击链接查看：${shareLink}`;
                 return `<div class="token-row">
                     <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
                     <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
                     <span style="font-size:0.8rem;color:#999">创建 ${created}</span>
                     <span style="font-size:0.8rem;color:#999">至 ${expStr}</span>
                     ${badge}
+                    <button class="btn btn-primary" style="padding:3px 9px;font-size:0.78rem"
+                            onclick="copyShareText('${esc(shareText)}')">分享</button>
                     <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
                             onclick="revokeShare('${esc(t.token)}')">撤销</button>
                 </div>`;
             }).join('');
+        }
+
+        // 复制分享文案
+        function copyShareText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已复制分享文案，快去粘贴给朋友吧！');
+            }).catch(() => {
+                alert('复制失败，请手动复制');
+            });
         }
 
         // ── 管理员：所有用户分享码 ──────────────────────────────────────────────
@@ -434,13 +453,18 @@
                 const created = new Date(t.created_at).toLocaleDateString();
                 const days    = Math.round((new Date(t.expires_at) - new Date(t.created_at)) / 86400000);
                 const durStr  = days >= 160 ? '半年' : `${days}天`;
+                const ownerName = t.owner_name || t.owner;
+                const shareLink = `${window.location.origin}/?code=${t.token}`;
+                const shareText = `${ownerName}给你分享了TA的课程表，点击链接查看：${shareLink}`;
                 return `<div class="token-row">
                     <code style="font-size:0.95rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
-                    <span style="font-size:0.82rem;color:#1890ff;font-weight:500">${esc(t.owner_name || t.owner)}</span>
+                    <span style="font-size:0.82rem;color:#1890ff;font-weight:500">${esc(ownerName)}</span>
                     <span style="font-size:0.78rem;color:#999">第${t.week_from}~${t.week_to}周</span>
                     <span style="font-size:0.78rem;color:#999">${created} · ${durStr}</span>
                     <span style="font-size:0.78rem;color:#999">至 ${expStr}</span>
                     ${badge}
+                    <button class="btn btn-primary" style="padding:3px 9px;font-size:0.78rem"
+                            onclick="copyShareText('${esc(shareText)}')">分享</button>
                     <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
                             onclick="revokeShare('${esc(t.token)}')">撤销</button>
                 </div>`;
@@ -475,7 +499,13 @@
 
         function copyCode() {
             const code = document.getElementById('share-result-code').textContent;
-            navigator.clipboard.writeText(code).then(() => alert(`已复制：${code}`));
+            navigator.clipboard.writeText(code).then(() => alert(`已复制分享码：${code}`));
+        }
+
+        function copyShareLink() {
+            const code = document.getElementById('share-result-code').textContent;
+            const link = `${window.location.origin}/?code=${code}`;
+            navigator.clipboard.writeText(link).then(() => alert('已复制分享链接'));
         }
 
         async function revokeShare(token) {

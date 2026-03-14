@@ -533,6 +533,45 @@ def settings():
 
 # ── 分享码 ────────────────────────────────────────────────────────────────────
 
+@app.route('/api/share/verify', methods=['GET'])
+def share_verify():
+    """验证分享码（不设置session，仅返回信息供前端使用）"""
+    token = request.args.get('token', '').strip().upper()
+    if not token:
+        return jsonify({'valid': False, 'message': '请输入分享码'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT owner, expires_at, week_from, week_to, revoked '
+                  'FROM share_tokens WHERE token=?', (token,))
+        row = c.fetchone()
+
+    if not row or row[4]:
+        return jsonify({'valid': False, 'message': '分享码无效或已撤销'}), 400
+    owner, expires_at, week_from, week_to, _ = row
+
+    try:
+        if datetime.fromisoformat(expires_at) < datetime.now():
+            return jsonify({'valid': False, 'message': '分享码已过期'}), 400
+    except ValueError:
+        return jsonify({'valid': False, 'message': '分享码无效'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT jw_name FROM users WHERE username=?', (owner,))
+        r = c.fetchone()
+    owner_name = (r[0] or owner) if r else owner
+
+    return jsonify({
+        'valid': True,
+        'token': token,
+        'owner_name': owner_name,
+        'week_from': week_from,
+        'week_to': week_to,
+        'expires_at': expires_at,
+    })
+
+
 @app.route('/api/share/enter', methods=['POST'])
 def share_enter():
     """用分享码进入只读浏览模式（无需账号密码）"""
