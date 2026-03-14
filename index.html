@@ -289,12 +289,19 @@
                     document.getElementById('current-week').textContent = `第${currentWeek}周`;
                 }
 
+                const w = document.getElementById('cache-warning');
                 if (data.from_cache) {
-                    const w = document.getElementById('cache-warning');
                     w.style.display = 'block';
-                    w.textContent = `⚠️ 显示缓存课表（${new Date(data.cache_time).toLocaleString()}）`;
+                    const t = new Date(data.cache_time).toLocaleString();
+                    if (data.fetch_failed) {
+                        w.textContent = `⚠️ 实时获取失败，显示缓存课表（${t}）`;
+                        w.style.color = '#d46b08';
+                    } else {
+                        w.textContent = `📋 缓存课表（${t}）`;
+                        w.style.color = '';
+                    }
                 } else {
-                    document.getElementById('cache-warning').style.display = 'none';
+                    w.style.display = 'none';
                 }
 
                 renderCourses(data);

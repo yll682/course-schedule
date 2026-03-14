@@ -439,6 +439,7 @@ def get_courses(week):
             return jsonify({
                 **json.loads(cache_row[0]),
                 'from_cache': True,
+                'fetch_failed': True,
                 'cache_time': cache_row[1],
             })
         return jsonify({'error': '无法获取课表，请稍后重试'}), 500
