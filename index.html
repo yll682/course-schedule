@@ -419,17 +419,31 @@
             // 课程数据索引，供点击事件查询
             window._courseMap = {};
 
-            table.innerHTML = '<div class="cell header">节次</div>';
-            weekOrder.forEach(day => {
+            // slot 编号 → grid 行号（表头占第1行，分隔行占第6、11行）
+            function slotRow(s) {
+                if (s <= 4) return s + 1;
+                if (s <= 8) return s + 2;
+                return s + 3;
+            }
+
+            // 表头行（grid-row:1）
+            table.innerHTML = '<div class="cell header" style="grid-row:1;grid-column:1">节次</div>';
+            weekOrder.forEach((day, di) => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
                 const dateStr = dayData && dayData.date ? dayData.date.slice(5) : '';
-                table.innerHTML += `<div class="cell header">${weekMap[day]}<br><small>${dateStr}</small></div>`;
+                table.innerHTML += `<div class="cell header" style="grid-row:1;grid-column:${di+2}">${weekMap[day]}<br><small>${dateStr}</small></div>`;
             });
+
+            // 两条分隔行（显式定位，不参与自动布局）
+            table.innerHTML += '<div style="grid-row:6;grid-column:1/-1;background:var(--c-surface)"></div>';
+            table.innerHTML += '<div style="grid-row:11;grid-column:1/-1;background:var(--c-surface)"></div>';
 
             const occupied = {};
             for (let slot = 1; slot <= 10; slot++) {
-                table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
-                weekOrder.forEach(day => {
+                const gr = slotRow(slot);
+                table.innerHTML += `<div class="cell time-slot" style="grid-row:${gr};grid-column:1">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
+                weekOrder.forEach((day, di) => {
+                    const gc = di + 2;
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
                     const dayData = data.完整课表.find(d => d.weekday === day);
@@ -439,11 +453,9 @@
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         window._courseMap[key] = course;
                         const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
-                        let gridSpan = duration;
-                        if (slot <= 4 && slot + duration - 1 >= 5) gridSpan++;
-                        if (slot <= 8 && slot + duration - 1 >= 9) gridSpan++;
+                        const endGr = slotRow(slot + duration - 1) + 1;
                         table.innerHTML += `
-                            <div class="cell" style="grid-row: span ${Math.max(1, Math.min(12, gridSpan))}">
+                            <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
                                 <div class="course" data-key="${esc(key)}">
                                     <div class="course-name">${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
@@ -452,12 +464,9 @@
                                 </div>
                             </div>`;
                     } else {
-                        table.innerHTML += '<div class="cell"></div>';
+                        table.innerHTML += `<div class="cell" style="grid-row:${gr};grid-column:${gc}"></div>`;
                     }
                 });
-                if (slot === 4 || slot === 8) {
-                    table.innerHTML += '<div style="grid-column: 1 / -1; background: var(--c-surface);"></div>';
-                }
             }
         }
 
