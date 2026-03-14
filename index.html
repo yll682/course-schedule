@@ -18,18 +18,43 @@
             padding: clamp(10px, 3vw, 20px);
             border-radius: 8px;
         }
-        h1 { text-align: center; font-size: clamp(1.2rem, 4vw, 1.8rem); margin: 10px 0; }
-        .toolbar { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; flex-wrap: wrap; gap: 10px; }
-        .week-selector { display: flex; align-items: center; gap: 10px; }
-        .week-selector button { padding: 6px 12px; border: 1px solid light-dark(#ddd, #555); background: light-dark(white, #3a3a3a); color: inherit; border-radius: 4px; cursor: pointer; }
-        .week-selector button:hover { background: light-dark(#f0f0f0, #4a4a4a); }
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .btn { padding: 6px 12px; border: 1px solid light-dark(#1890ff, #40a9ff); background: light-dark(#1890ff, #0d5aa7); color: white; border-radius: 4px; cursor: pointer; }
-        .btn:hover { opacity: 0.8; }
-        .meta { text-align: center; color: light-dark(#999, #888); margin: 10px 0; font-size: clamp(0.75rem, 2vw, 0.9rem); }
+        /* ── 顶栏 ── */
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 8px; margin: 4px 0 6px;
+        }
+        .page-header h1 {
+            margin: 0; flex: 1; text-align: center;
+            font-size: clamp(1.1rem, 4vw, 1.6rem);
+        }
+        .header-side { min-width: 80px; }
+        .header-side.right { text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+        .side-label { font-size: 0.82rem; color: light-dark(#888, #aaa); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+        .icon-btn {
+            padding: 5px 10px; background: transparent;
+            border: 1px solid light-dark(#ddd, #555);
+            border-radius: 6px; cursor: pointer; color: inherit;
+            font-size: 1rem; line-height: 1; white-space: nowrap;
+        }
+        .icon-btn:hover { background: light-dark(#f5f5f5, #3a3a3a); }
+        /* ── 周次栏 ── */
+        .week-bar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px; margin: 6px 0 14px;
+        }
+        .week-bar button {
+            padding: 6px 14px;
+            border: 1px solid light-dark(#ddd, #555);
+            background: light-dark(white, #3a3a3a);
+            color: inherit; border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+        }
+        .week-bar button:hover { background: light-dark(#f0f0f0, #4a4a4a); }
+        #current-week { font-size: 1rem; font-weight: 500; min-width: 64px; text-align: center; }
+        /* ── 课表 ── */
+        .meta { text-align: center; color: light-dark(#999, #888); margin: 8px 0; font-size: clamp(0.72rem, 2vw, 0.88rem); }
         .timetable {
             display: grid;
-            grid-template-columns: minmax(50px, 70px) repeat(7, 1fr);
+            grid-template-columns: minmax(46px, 62px) repeat(7, 1fr);
             grid-auto-rows: minmax(50px, auto);
             gap: 1px;
             background: light-dark(#ddd, #444);
@@ -42,7 +67,7 @@
             color: white; font-weight: bold; text-align: center;
             padding: 8px; font-size: clamp(0.7rem, 2vw, 0.9rem);
         }
-        .time-slot { background: light-dark(#f0f0f0, #3a3a3a); font-size: clamp(0.65rem, 1.8vw, 0.8rem); text-align: center; font-weight: bold; }
+        .time-slot { background: light-dark(#f0f0f0, #3a3a3a); font-size: clamp(0.62rem, 1.6vw, 0.78rem); text-align: center; font-weight: bold; }
         .course { background: light-dark(#e6f7ff, #1a3a4a); border-left: 3px solid light-dark(#1890ff, #40a9ff); padding: 6px; font-size: clamp(0.7rem, 1.8vw, 0.85rem); height: 100%; }
         .course-name { font-weight: bold; margin-bottom: 3px; }
         .course-info { opacity: 0.8; font-size: clamp(0.65rem, 1.6vw, 0.75rem); line-height: 1.4; }
@@ -54,28 +79,28 @@
 </head>
 <body>
     <div class="container">
-        <h1>📚 我的课程表</h1>
-        <div class="toolbar">
-            <div class="week-selector">
-                <button onclick="changeWeek(-1)">◀ 上周</button>
-                <span id="current-week">加载中...</span>
-                <button onclick="changeWeek(1)">下周 ▶</button>
+        <div class="page-header">
+            <div class="header-side">
+                <span class="side-label" id="username"></span>
             </div>
-            <div class="user-info">
-                <span id="username"></span>
-                <button class="btn" id="export-btn" onclick="exportTimetable()" style="display:none">导出</button>
-                <button class="btn" id="admin-btn" onclick="location.href='/admin.html'">设置</button>
-                <button class="btn" id="logout-btn" onclick="logout()">退出</button>
+            <h1>📚 课程表</h1>
+            <div class="header-side right">
+                <button class="icon-btn" id="settings-btn" onclick="location.href='/admin.html'" title="设置">⚙</button>
+                <button class="icon-btn" id="exit-btn" onclick="handleExit()" style="display:none">退出</button>
             </div>
         </div>
-        <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:10px 0;text-align:center"></div>
-        <div id="share-banner" style="display:none;background:#e6f4ff;color:#0958d9;padding:10px 14px;border-radius:4px;margin:10px 0;text-align:center;border:1px solid #91caff"></div>
+        <div class="week-bar">
+            <button onclick="changeWeek(-1)">◀ 上周</button>
+            <span id="current-week">加载中...</span>
+            <button onclick="changeWeek(1)">下周 ▶</button>
+        </div>
+        <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:8px 0;text-align:center"></div>
+        <div id="share-banner" style="display:none;background:#e6f4ff;color:#0958d9;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #91caff"></div>
         <div class="meta" id="meta"></div>
         <div class="timetable" id="timetable"></div>
     </div>
 
     <script>
-        // XSS 防护：插入 innerHTML 前转义所有 API 数据
         function esc(s) {
             return String(s ?? '')
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -84,79 +109,116 @@
 
         let currentWeek = 0;
         let maxWeek = 20;
-        let shareWeekMin = 1;
-        let shareWeekMax = 20;
+        let shareWeekMin = 1, shareWeekMax = 20;
         let isShareMode  = false;
         let importMode   = false;
-        let lastCourseData = null;
-        let userData = null;
+        let adminViewMode = false;
+        let adminViewUser = null;
+        let importWeeksMap = {};  // week(int) -> data
+
+        // URL 参数（管理员预览模式）
+        const _params = new URLSearchParams(window.location.search);
+        adminViewUser = _params.get('as') || null;
+        const _adminWeekParam = parseInt(_params.get('week') || '0', 10);
 
         async function checkAuth() {
-            // 导入预览模式：从 sessionStorage 加载课表
+            // 1. 导入预览模式
             const raw = sessionStorage.getItem('import_data');
             if (raw) {
                 try {
                     const data = JSON.parse(raw);
-                    if (data.完整课表 && data.metadata) {
-                        enterImportMode(data);
-                        return;
+                    if (data.format === 'semester' && data.weeks && Object.keys(data.weeks).length > 0) {
+                        enterImportMode(data, 'semester'); return;
+                    } else if (data.完整课表 && data.metadata) {
+                        enterImportMode(data, 'single'); return;
                     }
                 } catch (_) {}
                 sessionStorage.removeItem('import_data');
             }
 
+            // 2. 正常登录状态
             const resp = await fetch('/api/user', { credentials: 'include' });
             const data = await resp.json();
-            if (!data.logged_in) {
-                window.location.href = '/login.html';
-                return;
-            }
-            userData = data;
+            if (!data.logged_in) { window.location.href = '/login.html'; return; }
+
             if (data.is_share_mode) {
                 isShareMode  = true;
                 shareWeekMin = data.share_week_from;
                 shareWeekMax = data.share_week_to;
-                document.getElementById('admin-btn').style.display = 'none';
+                document.getElementById('settings-btn').style.display = 'none';
+                const exitBtn = document.getElementById('exit-btn');
+                exitBtn.style.display = ''; exitBtn.textContent = '退出';
                 document.getElementById('username').textContent = `查看 ${data.owner_name} 的课表`;
                 const expiry = new Date(data.share_expires_at).toLocaleDateString();
                 const banner = document.getElementById('share-banner');
                 banner.style.display = 'block';
-                banner.textContent =
-                    `👁 分享浏览模式（只读）· 第 ${shareWeekMin}~${shareWeekMax} 周 · 有效至 ${expiry}`;
+                banner.textContent = `👁 分享浏览模式（只读）· 第 ${shareWeekMin}~${shareWeekMax} 周 · 有效至 ${expiry}`;
+                return;
+            }
+
+            document.getElementById('username').textContent = data.name || data.username;
+
+            // 3. 管理员预览他人课表
+            if (adminViewUser && data.is_admin) {
+                adminViewMode = true;
+                currentWeek   = _adminWeekParam || 1;
+                document.getElementById('settings-btn').style.display = 'none';
+                const exitBtn = document.getElementById('exit-btn');
+                exitBtn.style.display = ''; exitBtn.textContent = '← 返回设置';
+                document.getElementById('current-week').textContent = `第${currentWeek}周`;
+                const banner = document.getElementById('share-banner');
+                banner.style.cssText = 'display:block;background:#fff7e6;color:#874d00;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #ffd591';
+                banner.textContent = `👁 管理员预览 · ${adminViewUser} 的课表（仅缓存数据）`;
+            }
+        }
+
+        function enterImportMode(data, format) {
+            importMode = true;
+            if (format === 'semester') {
+                for (const [k, v] of Object.entries(data.weeks)) {
+                    importWeeksMap[parseInt(k)] = v;
+                }
+                const nums = Object.keys(importWeeksMap).map(Number).sort((a, b) => a - b);
+                currentWeek = nums[0] || 1;
+                maxWeek     = nums[nums.length - 1] || 20;
+                const banner = document.getElementById('share-banner');
+                banner.style.cssText = 'display:block;background:#fff7e6;color:#d46b08;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #ffd591';
+                banner.textContent = `📂 导入预览模式（只读）· 共 ${nums.length} 周数据 · 关闭标签页后需重新导入`;
             } else {
-                document.getElementById('username').textContent = data.name || data.username;
+                currentWeek = data.metadata?.current_week || 1;
+                maxWeek     = data.metadata?.max_week || currentWeek;
+                importWeeksMap[currentWeek] = data;
+                const banner = document.getElementById('share-banner');
+                banner.style.cssText = 'display:block;background:#fff7e6;color:#d46b08;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #ffd591';
+                banner.textContent = '📂 导入预览模式（只读）· 关闭标签页后需重新导入';
             }
-        }
-
-        function enterImportMode(data) {
-            importMode     = true;
-            lastCourseData = data;
-            maxWeek        = data.metadata?.max_week || 20;
-            currentWeek    = data.metadata?.current_week || 1;
-
-            document.getElementById('admin-btn').style.display  = 'none';
-            document.getElementById('export-btn').style.display = 'none';
-            document.getElementById('username').textContent     = '导入预览';
-            document.getElementById('logout-btn').textContent   = '退出预览';
+            document.getElementById('settings-btn').style.display = 'none';
+            const exitBtn = document.getElementById('exit-btn');
+            exitBtn.style.display = ''; exitBtn.textContent = '退出预览';
+            document.getElementById('username').textContent = '导入预览';
             document.getElementById('current-week').textContent = `第${currentWeek}周`;
-
-            const banner = document.getElementById('share-banner');
-            banner.style.cssText = 'display:block;background:#fff7e6;color:#d46b08;padding:10px 14px;border-radius:4px;margin:10px 0;text-align:center;border:1px solid #ffd591';
-            banner.textContent = '📂 导入预览模式（只读）· 关闭标签页后需重新导入';
-
-            renderCourses(data);
+            renderCourses(importWeeksMap[currentWeek]);
         }
 
-        async function logout() {
+        function handleExit() {
             sessionStorage.removeItem('import_data');
-            if (!importMode) {
-                await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-            }
+            if (adminViewMode) { location.href = '/admin.html'; return; }
+            if (!importMode) fetch('/api/logout', { method: 'POST', credentials: 'include' });
             window.location.href = '/login.html';
         }
 
         function changeWeek(delta) {
-            if (importMode) return;  // 导入模式只有单周数据
+            if (importMode) {
+                const available = Object.keys(importWeeksMap).map(Number).sort((a, b) => a - b);
+                const idx = available.indexOf(currentWeek);
+                if (idx === -1) return;
+                const newIdx = idx + delta;
+                if (newIdx < 0 || newIdx >= available.length) return;
+                currentWeek = available[newIdx];
+                document.getElementById('current-week').textContent = `第${currentWeek}周`;
+                renderCourses(importWeeksMap[currentWeek]);
+                return;
+            }
             if (currentWeek === 0) return;
             currentWeek += delta;
             const minW = isShareMode ? shareWeekMin : 1;
@@ -172,7 +234,10 @@
             document.getElementById('timetable').innerHTML =
                 '<div style="grid-column:1/-1;padding:20px;text-align:center;color:#999">加载中...</div>';
             try {
-                const resp = await fetch(`/api/courses/${currentWeek}`, { credentials: 'include' });
+                const url = adminViewMode
+                    ? `/api/admin/view/${encodeURIComponent(adminViewUser)}/${currentWeek}`
+                    : `/api/courses/${currentWeek}`;
+                const resp = await fetch(url, { credentials: 'include' });
                 const data = await resp.json();
 
                 if (data.error) {
@@ -181,12 +246,10 @@
                     return;
                 }
 
-                if (data.metadata) {
+                if (!adminViewMode && data.metadata) {
                     if (currentWeek === 0) {
                         let w = data.metadata.current_week || 2;
-                        if (isShareMode) {
-                            w = Math.max(shareWeekMin, Math.min(shareWeekMax, w));
-                        }
+                        if (isShareMode) w = Math.max(shareWeekMin, Math.min(shareWeekMax, w));
                         currentWeek = w;
                     }
                     if (data.metadata.max_week) maxWeek = data.metadata.max_week;
@@ -194,34 +257,18 @@
                 }
 
                 if (data.from_cache) {
-                    const warning = document.getElementById('cache-warning');
-                    warning.style.display = 'block';
-                    warning.textContent = `⚠️ 教务系统连接失败，显示缓存课表（${new Date(data.cache_time).toLocaleString()}）`;
+                    const w = document.getElementById('cache-warning');
+                    w.style.display = 'block';
+                    w.textContent = `⚠️ 显示缓存课表（${new Date(data.cache_time).toLocaleString()}）`;
                 } else {
                     document.getElementById('cache-warning').style.display = 'none';
                 }
 
-                lastCourseData = data;
-                if (!isShareMode) {
-                    document.getElementById('export-btn').style.display = '';
-                }
                 renderCourses(data);
             } catch (e) {
                 document.getElementById('timetable').innerHTML =
                     '<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">加载失败，请刷新重试</div>';
             }
-        }
-
-        function exportTimetable() {
-            if (!lastCourseData) return;
-            const json = JSON.stringify(lastCourseData, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const a    = document.createElement('a');
-            a.href     = URL.createObjectURL(blob);
-            const dateStr = new Date().toISOString().slice(0, 10);
-            a.download = `课表_第${currentWeek}周_${dateStr}.json`;
-            a.click();
-            URL.revokeObjectURL(a.href);
         }
 
         function renderCourses(data) {
@@ -232,18 +279,12 @@
             const weekOrder = ['1','2','3','4','5','6','0'];
             const table = document.getElementById('timetable');
 
-            // 节次对应时间；3、4节在2号教学楼/2号实训楼时间不同，此处两种均显示
             const times = {
-                1:  '08:30-09:15',
-                2:  '09:20-10:05',
-                3:  '<span style="font-size:0.85em;line-height:1.6">2号楼<br>10:15-11:00<br><span style="opacity:0.55">其他<br>10:25-11:10</span></span>',
-                4:  '<span style="font-size:0.85em;line-height:1.6">2号楼<br>11:05-11:50<br><span style="opacity:0.55">其他<br>11:15-12:00</span></span>',
-                5:  '14:30-15:15',
-                6:  '15:25-16:10',
-                7:  '16:20-17:05',
-                8:  '17:15-18:00',
-                9:  '19:00-19:45',
-                10: '19:55-20:40',
+                1:'08:30-09:15', 2:'09:20-10:05',
+                3:'10:25-11:10', 4:'11:15-12:00',
+                5:'14:30-15:15', 6:'15:25-16:10',
+                7:'16:20-17:05', 8:'17:15-18:00',
+                9:'19:00-19:45', 10:'19:55-20:40',
             };
 
             table.innerHTML = '<div class="cell header">节次</div>';
@@ -254,17 +295,13 @@
             });
 
             const occupied = {};
-
             for (let slot = 1; slot <= 10; slot++) {
                 table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
-
                 weekOrder.forEach(day => {
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
-
                     const dayData = data.完整课表.find(d => d.weekday === day);
                     const course  = dayData && dayData.courses.find(c => c.time_slots.start_slot === slot);
-
                     if (course) {
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
@@ -287,11 +324,8 @@
 
         async function init() {
             await checkAuth();
-            if (!importMode) {
-                loadCourses();
-            }
+            if (!importMode) loadCourses();
         }
-
         init();
     </script>
 </body>

@@ -13,105 +13,103 @@
             color: light-dark(#333, #e0e0e0);
         }
         .container { max-width: 700px; margin: 0 auto; }
+        /* ── 顶栏 ── */
+        .page-header {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 20px;
+        }
+        .page-title { margin: 0; font-size: 1.25rem; flex: 1; }
+        .user-label { font-size: 0.85rem; color: #999; white-space: nowrap; }
+        /* ── 卡片 ── */
         .card {
             background: light-dark(white, #2d2d2d);
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 16px;
+            border-radius: 8px; padding: 20px; margin-bottom: 16px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
         .card-header {
             display: flex; align-items: center; gap: 10px;
-            margin-bottom: 18px;
-            padding-bottom: 12px;
+            margin-bottom: 16px; padding-bottom: 10px;
             border-bottom: 1px solid light-dark(#f0f0f0, #444);
         }
-        .card-header h2 { margin: 0; font-size: 1rem; }
+        .card-header h2 { margin: 0; font-size: 0.95rem; }
         .badge {
-            font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
-            font-weight: 600;
+            font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
         }
         .badge-admin { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
-        .badge-user  { background: light-dark(#f0f5ff, #1a1f3a); color: light-dark(#2f54eb, #85a5ff); border: 1px solid light-dark(#adc6ff, #2f54eb); }
-        .badge-soon  { background: light-dark(#f9f9f9, #333); color: #999; border: 1px solid #ddd; }
-        .field { margin-bottom: 16px; }
-        .field label { display: block; font-size: 0.9rem; font-weight: 500; margin-bottom: 6px; }
-        .field .hint { font-size: 0.78rem; color: #999; margin-top: 4px; }
+        .badge-user  { background: light-dark(#f0f5ff,#1a1f3a); color: light-dark(#2f54eb,#85a5ff); border: 1px solid light-dark(#adc6ff,#2f54eb); }
+        /* ── 字段 ── */
+        .field { margin-bottom: 14px; }
+        .field label { display: block; font-size: 0.88rem; font-weight: 500; margin-bottom: 5px; }
+        .field .hint { font-size: 0.76rem; color: #999; margin-top: 4px; }
         .field input, .field select {
-            width: 100%; padding: 9px 12px;
-            border: 1px solid light-dark(#d9d9d9, #555);
-            border-radius: 6px;
-            background: light-dark(white, #3a3a3a);
-            color: inherit; font-size: 0.95rem;
+            width: 100%; padding: 8px 11px;
+            border: 1px solid light-dark(#d9d9d9, #555); border-radius: 6px;
+            background: light-dark(white, #3a3a3a); color: inherit; font-size: 0.92rem;
         }
-        .field input:disabled, .field select:disabled {
-            background: light-dark(#fafafa, #2a2a2a);
-            color: light-dark(#bbb, #666);
-            cursor: not-allowed;
-        }
-        .coming-soon {
-            padding: 14px 16px;
-            border-radius: 6px;
-            background: light-dark(#fafafa, #252525);
-            border: 1px dashed light-dark(#ddd, #444);
-            color: #aaa; font-size: 0.88rem; text-align: center;
-        }
-        .actions {
-            display: flex; gap: 10px; margin-top: 4px;
-        }
-        .btn {
-            padding: 9px 22px; border: none; border-radius: 6px;
-            font-size: 0.9rem; cursor: pointer;
-        }
-        .btn-primary { background: light-dark(#1890ff, #0d5aa7); color: white; }
+        .field input:disabled { background: light-dark(#fafafa,#2a2a2a); color: light-dark(#bbb,#666); cursor: not-allowed; }
+        /* ── 按钮 ── */
+        .actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
+        .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
+        .btn-primary { background: light-dark(#1890ff,#0d5aa7); color: white; }
         .btn-primary:hover { opacity: 0.85; }
         .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
         .btn-default {
-            background: light-dark(white, #3a3a3a);
-            color: inherit;
-            border: 1px solid light-dark(#d9d9d9, #555);
+            background: light-dark(white,#3a3a3a); color: inherit;
+            border: 1px solid light-dark(#d9d9d9,#555);
         }
-        .btn-default:hover { background: light-dark(#f5f5f5, #444); }
-        .user-bar {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 20px;
-        }
-        .user-bar .info { font-size: 0.88rem; color: #999; }
-        .save-status {
-            font-size: 0.85rem; color: #52c41a;
-            display: none; margin-left: 10px;
-        }
+        .btn-default:hover { background: light-dark(#f5f5f5,#444); }
+        .btn-danger { color: #ff4d4f; border-color: #ffa39e; }
+        .btn-danger:hover { background: #fff1f0; }
+        .save-status { font-size: 0.82rem; color: #52c41a; display: none; }
         .save-status.show { display: inline; }
+        /* ── 分隔 ── */
+        .section-title { font-size: 0.82rem; color: #999; margin: 14px 0 8px; }
+        /* ── 分享码列表项 ── */
+        .token-row {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+            padding: 8px 10px;
+            border: 1px solid light-dark(#f0f0f0,#3a3a3a);
+            border-radius: 6px; margin-bottom: 6px;
+        }
+        /* ── 用户列表项 ── */
+        .user-row {
+            padding: 10px; border: 1px solid light-dark(#f0f0f0,#3a3a3a);
+            border-radius: 6px; margin-bottom: 8px;
+        }
+        .user-row-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
+        .week-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+        .week-chip {
+            padding: 2px 8px; font-size: 0.8rem; border: 1px solid light-dark(#d9d9d9,#555);
+            border-radius: 4px; cursor: pointer; background: light-dark(white,#3a3a3a);
+            color: inherit;
+        }
+        .week-chip:hover { background: light-dark(#e6f4ff,#1a3a4a); border-color: #1890ff; color: #1890ff; }
     </style>
 </head>
 <body>
     <div class="container">
 
-        <div class="user-bar">
-            <h1 style="margin:0;font-size:1.3rem">⚙️ 设置</h1>
-            <span class="info" id="user-info">加载中...</span>
+        <!-- ── 顶栏 ── -->
+        <div class="page-header">
+            <button class="btn btn-default" onclick="location.href='/'" style="padding:5px 12px">← 返回</button>
+            <h1 class="page-title">⚙️ 设置</h1>
+            <span class="user-label" id="user-info">加载中...</span>
         </div>
 
-        <!-- ── 管理员专属：全局抓取设置 ── -->
-        <div class="card" id="admin-card" style="display:none">
+        <!-- ── 账户（所有用户）── -->
+        <div class="card">
             <div class="card-header">
-                <h2>后台抓取</h2>
-                <span class="badge badge-admin">管理员</span>
+                <h2>账户</h2>
+                <span class="badge badge-user">所有用户</span>
             </div>
-
-            <div class="field">
-                <label>自动抓取间隔（分钟）</label>
-                <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
-                <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30-120 分钟。</div>
-            </div>
-
             <div class="actions">
-                <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
-                <span class="save-status" id="admin-save-status">✓ 已保存</span>
+                <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出整学期课表</button>
+                <button class="btn btn-default btn-danger" onclick="doLogout()">退出登录</button>
             </div>
+            <div id="export-status" style="font-size:0.82rem;color:#999;margin-top:8px;display:none"></div>
         </div>
 
-        <!-- ── 个人设置（全员）：分享码管理 ── -->
+        <!-- ── 分享码（所有用户）── -->
         <div class="card">
             <div class="card-header">
                 <h2>分享码</h2>
@@ -119,8 +117,8 @@
             </div>
 
             <!-- 创建 -->
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
-                <div class="field" style="margin:0;flex:1;min-width:120px">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+                <div class="field" style="margin:0;flex:1;min-width:110px">
                     <label>有效期</label>
                     <select id="share-expires">
                         <option value="1d">1 天</option>
@@ -129,11 +127,11 @@
                         <option value="180d">半年</option>
                     </select>
                 </div>
-                <div class="field" style="margin:0;flex:1;min-width:80px">
+                <div class="field" style="margin:0;flex:1;min-width:70px">
                     <label>从第几周</label>
                     <input type="number" id="share-week-from" value="1" min="1" max="30">
                 </div>
-                <div class="field" style="margin:0;flex:1;min-width:80px">
+                <div class="field" style="margin:0;flex:1;min-width:70px">
                     <label>到第几周</label>
                     <input type="number" id="share-week-to" value="19" min="1" max="30">
                 </div>
@@ -141,33 +139,60 @@
             </div>
 
             <!-- 生成结果 -->
-            <div id="share-result" style="display:none;background:light-dark(#f6ffed,#162312);border:1px solid light-dark(#b7eb8f,#274916);border-radius:6px;padding:12px;margin-bottom:16px">
-                <div style="font-size:0.85rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成，发给对方即可</div>
+            <div id="share-result" style="display:none;background:light-dark(#f6ffed,#162312);border:1px solid light-dark(#b7eb8f,#274916);border-radius:6px;padding:12px;margin-bottom:14px">
+                <div style="font-size:0.82rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成，发给对方即可</div>
                 <div style="display:flex;align-items:center;gap:8px">
-                    <code id="share-result-code" style="font-size:1.3rem;letter-spacing:4px;font-weight:bold"></code>
+                    <code id="share-result-code" style="font-size:1.25rem;letter-spacing:4px;font-weight:bold"></code>
                     <button class="btn btn-default" style="padding:4px 10px;font-size:0.8rem" onclick="copyCode()">复制</button>
                 </div>
-                <div id="share-result-info" style="font-size:0.8rem;color:#999;margin-top:4px"></div>
+                <div id="share-result-info" style="font-size:0.78rem;color:#999;margin-top:4px"></div>
             </div>
 
-            <!-- 已有分享码列表 -->
-            <div id="share-list-wrap">
-                <div style="font-size:0.85rem;color:#999;margin-bottom:8px" id="share-list-label">我的分享码</div>
-                <div id="share-list">加载中...</div>
+            <!-- 我的分享码列表 -->
+            <div class="section-title" id="share-list-label">我的分享码</div>
+            <div id="share-list">加载中...</div>
+        </div>
+
+        <!-- ── 后台抓取（管理员）── -->
+        <div class="card" id="admin-card" style="display:none">
+            <div class="card-header">
+                <h2>后台抓取</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div class="field">
+                <label>自动抓取间隔（分钟）</label>
+                <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
+                <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30-120 分钟。</div>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
+                <span class="save-status" id="admin-save-status">✓ 已保存</span>
+            </div>
+
+            <!-- 分享码管理 -->
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid light-dark(#f0f0f0,#444)">
+                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">分享码管理</div>
+                <div id="admin-share-list">加载中...</div>
             </div>
         </div>
 
-        <!-- ── 返回 ── -->
-        <div style="margin-top:8px">
-            <button class="btn btn-default" onclick="location.href='/'">← 返回课程表</button>
+        <!-- ── 用户课表（管理员）── -->
+        <div class="card" id="users-card" style="display:none">
+            <div class="card-header">
+                <h2>用户课表</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div class="field hint" style="margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
+            <div id="users-list">加载中...</div>
         </div>
 
     </div>
 
     <script>
         let isAdmin = false;
+        let maxWeekForExport = 20;
+        let adminUsersList = [];
 
-        // XSS 防护
         function esc(s) {
             return String(s ?? '')
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -176,97 +201,155 @@
 
         async function init() {
             const resp = await fetch('/api/settings', { credentials: 'include' });
-            if (resp.status === 401) { location.href = '/'; return; }
+            if (resp.status === 401) { location.href = '/login.html'; return; }
 
             const data = await resp.json();
             isAdmin = data.is_admin || false;
+            maxWeekForExport = data.max_week || 20;
 
-            // 更新用户栏
             const userResp = await fetch('/api/user', { credentials: 'include' });
             const user = await userResp.json();
             const adminLabel = isAdmin ? ' · <span style="color:#cf1322">管理员</span>' : '';
             document.getElementById('user-info').innerHTML =
-                `${user.name || user.username} (${user.username})${adminLabel}`;
+                `${esc(user.name || user.username)} (${esc(user.username)})${adminLabel}`;
 
-            // 填入当前设置值
             if (data.fetch_interval) {
                 document.getElementById('fetch_interval').value = data.fetch_interval;
             }
 
-            // 管理员才显示并可编辑
             if (isAdmin) {
                 document.getElementById('admin-card').style.display = 'block';
+                document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
+                loadAdminShares();
+                loadUsers();
             }
+
+            loadShares();
         }
 
         async function saveAdminSettings() {
             const val = parseInt(document.getElementById('fetch_interval').value, 10);
             if (isNaN(val) || val < 5 || val > 1440) {
-                alert('间隔必须在 5 到 1440 分钟之间');
-                return;
+                alert('间隔必须在 5 到 1440 分钟之间'); return;
             }
             const btn = document.getElementById('save-admin-btn');
-            btn.disabled = true;
-            btn.textContent = '保存中…';
-
+            btn.disabled = true; btn.textContent = '保存中…';
             try {
                 const resp = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({
-                        fetch_interval: val,
-                    }),
+                    body: JSON.stringify({ fetch_interval: val }),
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    const status = document.getElementById('admin-save-status');
-                    status.classList.add('show');
-                    setTimeout(() => status.classList.remove('show'), 2500);
+                    const s = document.getElementById('admin-save-status');
+                    s.classList.add('show');
+                    setTimeout(() => s.classList.remove('show'), 2500);
                 }
             } finally {
-                btn.disabled = false;
-                btn.textContent = '保存';
+                btn.disabled = false; btn.textContent = '保存';
             }
         }
 
-        init();
-        loadShares();
+        async function doLogout() {
+            await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            location.href = '/login.html';
+        }
 
-        // ── 分享码 ──────────────────────────────────────────────────────────────
+        // ── 导出整学期 ──────────────────────────────────────────────────────────
+        async function exportSemester() {
+            const btn    = document.getElementById('export-btn');
+            const status = document.getElementById('export-status');
+            btn.disabled = true;
+            const result = { format: 'semester', weeks: {}, exported_at: new Date().toISOString() };
+            let maxW = maxWeekForExport;
+
+            for (let w = 1; w <= maxW; w++) {
+                status.style.display = 'block';
+                status.textContent   = `正在导出第 ${w}/${maxW} 周...`;
+                try {
+                    const resp = await fetch(`/api/courses/${w}`, { credentials: 'include' });
+                    const data = await resp.json();
+                    if (!data.error) {
+                        result.weeks[w] = data;
+                        if (data.metadata?.max_week) maxW = Math.min(data.metadata.max_week, 30);
+                    }
+                } catch (_) {}
+            }
+
+            const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `课表_整学期_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+
+            status.textContent = `✓ 导出完成，共 ${Object.keys(result.weeks).length} 周`;
+            btn.disabled = false;
+            setTimeout(() => { status.style.display = 'none'; }, 4000);
+        }
+
+        // ── 我的分享码 ───────────────────────────────────────────────────────────
         async function loadShares() {
-            const url  = isAdmin ? '/api/share/list?all=1' : '/api/share/list';
-            const resp = await fetch(url, { credentials: 'include' });
+            const resp = await fetch('/api/share/list', { credentials: 'include' });
             if (!resp.ok) return;
-            const data  = await resp.json();
-            const el    = document.getElementById('share-list');
-            const label = document.getElementById('share-list-label');
-            if (isAdmin) label.textContent = '所有用户的分享码';
+            const data = await resp.json();
+            const el   = document.getElementById('share-list');
             if (!data.tokens || data.tokens.length === 0) {
-                el.innerHTML = '<div style="color:#aaa;font-size:0.85rem">暂无分享码</div>';
+                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
+                return;
+            }
+            const now = new Date().toISOString();
+            el.innerHTML = data.tokens.map(t => {
+                const expired = t.expired;
+                const badge   = expired
+                    ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
+                    : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
+                const expStr  = new Date(t.expires_at).toLocaleString();
+                const created = new Date(t.created_at).toLocaleDateString();
+                return `<div class="token-row">
+                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
+                    <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
+                    <span style="font-size:0.8rem;color:#999">创建 ${created}</span>
+                    <span style="font-size:0.8rem;color:#999">至 ${expStr}</span>
+                    ${badge}
+                    <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
+                            onclick="revokeShare('${esc(t.token)}', false)">撤销</button>
+                </div>`;
+            }).join('');
+        }
+
+        // ── 管理员：所有用户的分享码 ──────────────────────────────────────────
+        async function loadAdminShares() {
+            const resp = await fetch('/api/share/list?all=1', { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const el   = document.getElementById('admin-share-list');
+            if (!data.tokens || data.tokens.length === 0) {
+                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
                 return;
             }
             el.innerHTML = data.tokens.map(t => {
-                const exp   = new Date(t.expires_at).toLocaleString();
-                const badge = t.expired
+                const badge   = t.expired
                     ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
                     : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
-                const ownerTag = isAdmin
-                    ? `<span style="font-size:0.8rem;color:#1890ff;font-weight:500">${esc(t.owner_name || t.owner)}</span>`
-                    : '';
-                return `
-                <div style="display:flex;align-items:center;justify-content:space-between;
-                            padding:8px 10px;border:1px solid light-dark(#f0f0f0,#444);
-                            border-radius:6px;margin-bottom:6px;flex-wrap:wrap;gap:6px">
-                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
-                    ${ownerTag}
-                    <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
-                    <span style="font-size:0.8rem;color:#999">至 ${exp}</span>
+                const expStr  = new Date(t.expires_at).toLocaleString();
+                const created = new Date(t.created_at).toLocaleDateString();
+                // 计算有效天数
+                const days    = Math.round((new Date(t.expires_at) - new Date(t.created_at)) / 86400000);
+                const durStr  = days >= 160 ? '半年' : `${days}天`;
+                return `<div class="token-row">
+                    <code style="font-size:0.95rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
+                    <span style="font-size:0.82rem;color:#1890ff;font-weight:500">${esc(t.owner_name || t.owner)}</span>
+                    <span style="font-size:0.78rem;color:#999">第${t.week_from}~${t.week_to}周</span>
+                    <span style="font-size:0.78rem;color:#999">${created} · ${durStr}</span>
+                    <span style="font-size:0.78rem;color:#999">至 ${expStr}</span>
                     ${badge}
-                    <button class="btn btn-default" style="padding:3px 10px;font-size:0.8rem"
-                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                    <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
+                            onclick="revokeShare('${esc(t.token)}', true)">撤销</button>
                 </div>`;
             }).join('');
         }
@@ -275,8 +358,7 @@
             const wFrom = parseInt(document.getElementById('share-week-from').value, 10);
             const wTo   = parseInt(document.getElementById('share-week-to').value, 10);
             if (isNaN(wFrom) || isNaN(wTo) || wFrom < 1 || wTo > 30 || wFrom > wTo) {
-                alert('请检查周次范围（1~30，起始不能大于结束）');
-                return;
+                alert('请检查周次范围（1~30，起始不能大于结束）'); return;
             }
             const resp = await fetch('/api/share/create', {
                 method: 'POST',
@@ -284,8 +366,7 @@
                 credentials: 'include',
                 body: JSON.stringify({
                     expires_in: document.getElementById('share-expires').value,
-                    week_from:  wFrom,
-                    week_to:    wTo,
+                    week_from: wFrom, week_to: wTo,
                 }),
             });
             const data = await resp.json();
@@ -296,6 +377,7 @@
                 `第 ${data.week_from}~${data.week_to} 周 · 有效至 ${new Date(data.expires_at).toLocaleString()}`;
             document.getElementById('share-result').style.display = 'block';
             loadShares();
+            if (isAdmin) loadAdminShares();
         }
 
         function copyCode() {
@@ -303,7 +385,7 @@
             navigator.clipboard.writeText(code).then(() => alert(`已复制：${code}`));
         }
 
-        async function revokeShare(token) {
+        async function revokeShare(token, isAdminAction) {
             if (!confirm(`确认撤销分享码 ${token}？`)) return;
             await fetch('/api/share/revoke', {
                 method: 'POST',
@@ -312,11 +394,47 @@
                 body: JSON.stringify({ token }),
             });
             loadShares();
-            // 如果当前展示的正好是被撤销的码，隐藏结果框
+            if (isAdmin) loadAdminShares();
             if (document.getElementById('share-result-code').textContent === token) {
                 document.getElementById('share-result').style.display = 'none';
             }
         }
+
+        // ── 用户列表 ─────────────────────────────────────────────────────────────
+        async function loadUsers() {
+            const resp = await fetch('/api/admin/users', { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            adminUsersList = data.users || [];
+            const el = document.getElementById('users-list');
+            if (!adminUsersList.length) {
+                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无用户</div>';
+                return;
+            }
+            el.innerHTML = adminUsersList.map((u, i) => {
+                const chips = u.cached_weeks.map(w =>
+                    `<button class="week-chip" onclick="viewUserWeek(${i}, ${w})">第${w}周</button>`
+                ).join('');
+                const loginStr = u.last_login ? new Date(u.last_login).toLocaleDateString() : '未知';
+                return `<div class="user-row">
+                    <div class="user-row-head">
+                        <span><strong>${esc(u.name)}</strong>
+                            <span style="color:#999;font-size:0.85rem"> · ${esc(u.username)}</span>
+                            <span style="color:#aaa;font-size:0.8rem"> · ${esc(u.class_name)}</span>
+                        </span>
+                        <span style="color:#aaa;font-size:0.78rem">最近登录 ${loginStr}</span>
+                    </div>
+                    <div class="week-chips">${chips || '<span style="color:#aaa;font-size:0.8rem">无缓存数据</span>'}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function viewUserWeek(userIdx, week) {
+            const u = adminUsersList[userIdx];
+            location.href = `/?as=${encodeURIComponent(u.username)}&week=${week}`;
+        }
+
+        init();
     </script>
 </body>
 </html>

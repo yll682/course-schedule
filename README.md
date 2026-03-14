@@ -1,80 +1,82 @@
-# 课程表系统
+# 课程表
 
-自动同步教务系统课表的Web应用
+与翔安教务系统（JW）实时同步的 Web 课程表，支持多用户、分享、导入/导出。
 
-## ✨ 已实现功能
+## ✨ 功能
 
-### 核心功能
-- ✅ 用户登录系统（待对接教务系统API）
-- ✅ 课程表展示（周视图，10节课时间轴）
-- ✅ 周次切换（上周/下周按钮）
-- ✅ 多节连上课程跨格子显示
-- ✅ 响应式设计（适配手机/平板/电脑）
-- ✅ 深色/浅色主题自动适配
+### 核心
+- 登录教务系统账号，自动获取并展示课程表（周视图）
+- 后台定时抓取（默认 60 分钟），断网时展示本地缓存
+- 多节连上跨格显示，深色/浅色主题自动跟随系统
 
-### 缓存机制
-- ✅ 永久缓存课表数据
-- ✅ 每次访问尝试更新，失败则使用缓存
-- ✅ 缓存失败时显示黄色提示条
-- ✅ 后台定时抓取（默认60分钟）
-- ✅ 自动抓取上周、当周、下周课表
+### 分享
+- 生成 8 位分享码，设定有效期（1 天 / 7 天 / 30 天 / 半年）和可查看周次范围
+- 持码者在登录页输入分享码即可只读查看，无需账号密码
 
-### 管理功能
-- ✅ 管理员后台（配置抓取频率）
-- ✅ 多用户支持（每人独立课表）
-- ✅ SQLite数据库存储
+### 导入 / 导出
+- **导出整学期**：在设置页一键导出全学期 JSON 文件（同时触发缓存所有周）
+- **导入查看**：在登录页选择 JSON 文件，纯前端预览，关闭标签页后自动清除
 
-## 🚀 部署方式
+### 管理员
+- 调整全局后台抓取间隔
+- 查看并撤销所有用户的分享码
+- 查看所有用户已缓存的课表（按周次点击查看，不会主动请求教务系统）
 
-### Docker部署（推荐）
+## 🚀 部署
+
+### Docker（推荐）
+
 ```bash
+cp .env.example .env
+# 编辑 .env，至少填写 SECRET_KEY
 docker-compose up -d
 ```
 
-### Windows部署
+### 本地直接运行
+
 ```bash
 pip install -r requirements.txt
-start.bat
+python server.py
 ```
 
-访问：http://localhost:5000
+访问 http://localhost:5000
 
 ## ⚙️ 配置
 
-1. 修改 `server.py` 中的管理员学号：
-```python
-ADMIN_USERS = ['YOUR_STUDENT_ID']
-```
+`.env` 文件（参考 `.env.example`）：
 
-2. 登录后在管理后台设置抓取频率
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `SECRET_KEY` | Flask Session 密钥（必填，否则重启后需重新登录） | 随机生成 |
+| `PORT` | 监听端口 | 5000 |
+| `FLASK_DEBUG` | 开发模式 | false |
+| `DB_FILE` | 数据库路径 | courses.db |
 
-## 📋 待实现功能
-
-- [ ] 对接教务系统登录API
-- [ ] 实现真实课表数据抓取
-- [ ] 自动检测当前周次
-- [ ] 密码修改检测与重新登录提示
+**管理员账号**：修改 `server.py` 中的 `ADMIN_USERS` 列表，填入学号。
 
 ## 🗂️ 项目结构
 
 ```
-├── server.py           # Flask后端
-├── index.html          # 课表主页
-├── login.html          # 登录页
-├── admin.html          # 管理后台
-├── courses.db          # SQLite数据库
-├── Dockerfile          # Docker配置
-├── docker-compose.yml  # Docker Compose配置
-└── requirements.txt    # Python依赖
+├── server.py           # Flask 后端
+├── jw_client.py        # 教务系统 API 客户端
+├── index.html          # 课程表主页
+├── login.html          # 登录页（含分享码 / 导入入口）
+├── admin.html          # 设置页
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── .env.example
 ```
 
 ## 🔒 安全说明
 
-- 不要将包含真实账号密码的文件提交到Git
-- `参考文件/` 目录已被 `.gitignore` 忽略
-- 生产环境请修改 `app.secret_key`
+- 用户密码经 AES-ECB 加密后存入本地 SQLite，不以明文保存
+- Session 使用 HttpOnly + SameSite=Lax Cookie
+- 登录接口有频率限制（5 次/分钟/IP）
+- 静态文件路由屏蔽 `.py`、`.db`、`.env` 等敏感扩展名
+- `*.db`、`.env` 已加入 `.gitignore`，不会提交到版本库
 
 ## 📦 卸载
 
-**Docker**: `docker-compose down`
-**Windows**: 直接删除文件夹
+**Docker**：`docker-compose down -v`
+**本地**：直接删除文件夹

@@ -446,6 +446,21 @@ def settings():
         c.execute('SELECT key, value FROM settings')
         result = dict(c.fetchall())
     result['is_admin'] = is_admin
+
+    # 附带用户最新缓存的 max_week，供前端导出使用
+    username = session['username']
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT data FROM courses WHERE username=? ORDER BY cached_at DESC LIMIT 1',
+                  (username,))
+        row = c.fetchone()
+    max_week = 20
+    if row:
+        try:
+            max_week = json.loads(row[0]).get('metadata', {}).get('max_week', 20)
+        except Exception:
+            pass
+    result['max_week'] = max_week
     return jsonify(result)
 
 
@@ -601,6 +616,48 @@ def share_revoke():
         conn.commit()
 
     return jsonify({'success': True})
+
+
+@app.route('/api/admin/users', methods=['GET'])
+def admin_list_users():
+    """管理员获取所有用户及其缓存周次"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT username, jw_name, jw_class, last_login FROM users ORDER BY last_login DESC')
+        users = c.fetchall()
+        result = []
+        for u in users:
+            c.execute('SELECT week FROM courses WHERE username=? ORDER BY week', (u[0],))
+            cached_weeks = [r[0] for r in c.fetchall()]
+            result.append({
+                'username':     u[0],
+                'name':         u[1] or u[0],
+                'class_name':   u[2] or '',
+                'last_login':   u[3] or '',
+                'cached_weeks': cached_weeks,
+            })
+    return jsonify({'users': result})
+
+
+@app.route('/api/admin/view/<string:target_user>/<int:week>', methods=['GET'])
+def admin_view(target_user, week):
+    """管理员查看指定用户的缓存课表（不触发实时抓取）"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                  (target_user, week))
+        row = c.fetchone()
+
+    if not row:
+        return jsonify({'error': f'第 {week} 周暂无缓存数据'}), 404
+
+    return jsonify({**json.loads(row[0]), 'from_cache': True, 'cache_time': row[1]})
 
 
 if __name__ == '__main__':

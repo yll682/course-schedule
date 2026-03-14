@@ -149,7 +149,10 @@
             reader.onload = e => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    if (!data.完整课表 || !data.metadata) {
+                    const valid =
+                        (data.format === 'semester' && data.weeks && Object.keys(data.weeks).length > 0) ||
+                        (data.完整课表 && data.metadata);
+                    if (!valid) {
                         error.textContent = '文件格式无效，请导入有效的课表 JSON';
                         return;
                     }
