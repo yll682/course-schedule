@@ -189,8 +189,30 @@ patch_admin() {
 }
 
 setup_systemd() {
+    # ── 数据目录迁移（兼容旧版本）──────────────────────────────
+    local old_db="$APP_DIR/courses.db"
+    local new_db="$APP_DIR/data/courses.db"
+    mkdir -p "$APP_DIR/data"
+    # 如果旧数据库存在且新位置还没有，则迁移
+    if [[ -f "$old_db" && ! -f "$new_db" ]]; then
+        info "迁移数据库到 data/ 目录..."
+        mv "$old_db" "$new_db"
+        # 顺带移走可能存在的 WAL 旁文件
+        mv "${old_db}-wal" "$APP_DIR/data/" 2>/dev/null || true
+        mv "${old_db}-shm" "$APP_DIR/data/" 2>/dev/null || true
+        ok "数据库已迁移"
+    fi
+    chown "$APP_USER:$APP_USER" "$APP_DIR/data"
+    chmod 750 "$APP_DIR/data"
+    [[ -f "$new_db" ]] && chown "$APP_USER:$APP_USER" "$new_db"
+    # 更新 .env 中的 DB_FILE（无论新旧安装）
+    if grep -q "^DB_FILE=" "$APP_DIR/.env" 2>/dev/null; then
+        sed -i "s|^DB_FILE=.*|DB_FILE=${APP_DIR}/data/courses.db|" "$APP_DIR/.env"
+    else
+        echo "DB_FILE=${APP_DIR}/data/courses.db" >> "$APP_DIR/.env"
+    fi
+    # ── 以下原有逻辑 ───────────────────────────────────────────
     info "配置 systemd 服务..."
-    cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=课程表 Web 应用
 After=network.target
@@ -217,10 +239,6 @@ WantedBy=multi-user.target
 EOF
     chown root:root "$APP_DIR"
     chmod 755 "$APP_DIR"
-    # 单独的数据目录：courseapp 需要读写 db 及 WAL 旁文件
-    mkdir -p "$APP_DIR/data"
-    chown "$APP_USER:$APP_USER" "$APP_DIR/data"
-    chmod 750 "$APP_DIR/data"
     # .env 也由 courseapp 读取
     chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
     systemctl daemon-reload
