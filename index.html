@@ -290,16 +290,11 @@
                 }
 
                 const w = document.getElementById('cache-warning');
-                if (data.from_cache) {
-                    w.style.display = 'block';
+                if (data.fetch_failed) {
                     const t = new Date(data.cache_time).toLocaleString();
-                    if (data.fetch_failed) {
-                        w.textContent = `⚠️ 实时获取失败，显示缓存课表（${t}）`;
-                        w.style.color = '#d46b08';
-                    } else {
-                        w.textContent = `📋 缓存课表（${t}）`;
-                        w.style.color = '';
-                    }
+                    w.style.display = 'block';
+                    w.style.color = '#d46b08';
+                    w.textContent = `⚠️ 实时获取失败，显示缓存课表（${t}）`;
                 } else {
                     w.style.display = 'none';
                 }
@@ -312,8 +307,11 @@
         }
 
         function renderCourses(data) {
+            const updateTime = data.from_cache
+                ? new Date(data.cache_time).toLocaleString()
+                : new Date(data.metadata.提取时间).toLocaleString();
             document.getElementById('meta').innerHTML =
-                `${esc(data.metadata.用户)} | ${esc(data.metadata.班级)} | ${esc(data.metadata.周次)} | 更新: ${new Date(data.metadata.提取时间).toLocaleString()}`;
+                `${esc(data.metadata.用户)} | ${esc(data.metadata.班级)} | ${esc(data.metadata.周次)} | 更新: ${updateTime}`;
 
             const weekMap   = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
             const weekOrder = ['1','2','3','4','5','6','0'];

@@ -398,11 +398,16 @@ def get_courses(week):
     # ── 优先读缓存，无缓存时才实时抓取 ──────────────────────────────────────────
     force = request.args.get('force') == '1'
 
-    if not force and week != 0:
+    if not force:
         with _db() as conn:
             c = conn.cursor()
-            c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
-                      (username, week))
+            if week == 0:
+                # 取最近一次缓存的周次作为"当前周"
+                c.execute('SELECT data, cached_at FROM courses WHERE username=? '
+                          'ORDER BY cached_at DESC LIMIT 1', (username,))
+            else:
+                c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                          (username, week))
             cache_row = c.fetchone()
         if cache_row:
             return jsonify({
@@ -411,7 +416,7 @@ def get_courses(week):
                 'cache_time': cache_row[1],
             })
 
-    # 无缓存（或 week=0 需要查当前周，或强制刷新）才去抓取
+    # 无缓存或强制刷新才去实时抓取
     cache_row = None
     if week != 0:
         with _db() as conn:
