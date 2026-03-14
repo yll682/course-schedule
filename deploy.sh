@@ -149,6 +149,8 @@ create_user() {
 setup_code() {
     # Git 2.35+ 安全检查：root 操作其他用户所有的目录需要豁免
     git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+    # 国内网络 HTTP/2 不稳定，强制用 HTTP/1.1
+    git config --global http.version HTTP/1.1 2>/dev/null || true
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
         git -C "$APP_DIR" pull --ff-only
