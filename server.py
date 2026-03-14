@@ -438,13 +438,22 @@ def get_courses(week):
                           (username, week))
                 cache_row = c.fetchone()
         if cache_row:
-            return jsonify({
-                **json.loads(cache_row[0]),
-                'from_cache': True,
-                'cache_time': cache_row[1],
-            })
+            # 缓存超过 15 分钟视为过期，走实时抓取（失败仍回退旧缓存）
+            stale = False
+            try:
+                age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
+                if age > 15 * 60:
+                    stale = True
+            except (ValueError, TypeError):
+                stale = True
+            if not stale:
+                return jsonify({
+                    **json.loads(cache_row[0]),
+                    'from_cache': True,
+                    'cache_time': cache_row[1],
+                })
 
-    # 无缓存或强制刷新才去实时抓取
+    # 无缓存、缓存过期或强制刷新 → 实时抓取
     cache_row = None
     if week != 0:
         with _db() as conn:
