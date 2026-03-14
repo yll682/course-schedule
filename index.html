@@ -206,17 +206,24 @@
     </div>
 
     <script>
-        // ── 缩放 ──
-        const ZOOM_STEPS = [0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5];
-        let _zoomIdx = parseInt(localStorage.getItem('kcb-zoom') || '4', 10);
+        // ── 缩放 ── 改变行高和字号，让格子真正变大/小
+        // 行高单位 px，字号单位 rem
+        const ZOOM_STEPS = [
+            { row: 36, font: 0.62 },
+            { row: 44, font: 0.68 },
+            { row: 52, font: 0.74 },
+            { row: 62, font: 0.82 },  // 默认
+            { row: 74, font: 0.90 },
+            { row: 88, font: 1.00 },
+        ];
+        let _zoomIdx = parseInt(localStorage.getItem('kcb-zoom') || '3', 10);
 
         function applyZoom() {
-            const w = document.querySelector('.timetable-wrapper');
-            if (!w) return;
-            const s = ZOOM_STEPS[_zoomIdx];
-            w.style.transformOrigin = 'top left';
-            w.style.transform = `scale(${s})`;
-            w.style.marginBottom = `${(s - 1) * w.offsetHeight}px`;
+            const t = document.getElementById('timetable');
+            if (!t) return;
+            const { row, font } = ZOOM_STEPS[_zoomIdx];
+            t.style.gridAutoRows = row + 'px';
+            t.style.fontSize = font + 'rem';
         }
 
         function zoom(dir) {
