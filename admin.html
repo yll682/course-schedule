@@ -216,7 +216,7 @@
             <div class="field">
                 <label>第3、4节特殊时间教学楼标识</label>
                 <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
-                <div class="hint">地点包含此字符串时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。留空则不启用。</div>
+                <div class="hint">地点包含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多个标识用英文逗号分隔，如 <code>教2,实2</code>。留空则不启用。</div>
             </div>
             <div class="actions">
                 <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>

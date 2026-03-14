@@ -231,9 +231,10 @@
         const _SLOT_END_SP   = {3:'11:00', 4:'11:50'};
 
         function getCourseTime(startSlot, duration, location) {
-            const special = slot34SpecialPattern && location.includes(slot34SpecialPattern);
-            const starts  = special ? {..._SLOT_START, ..._SLOT_START_SP} : _SLOT_START;
-            const ends    = special ? {..._SLOT_END,   ..._SLOT_END_SP}   : _SLOT_END;
+            const patterns = slot34SpecialPattern.split(',').map(p => p.trim()).filter(Boolean);
+            const special  = patterns.length > 0 && patterns.some(p => location.includes(p));
+            const starts   = special ? {..._SLOT_START, ..._SLOT_START_SP} : _SLOT_START;
+            const ends     = special ? {..._SLOT_END,   ..._SLOT_END_SP}   : _SLOT_END;
             const s = starts[startSlot] ?? '';
             const e = ends[startSlot + duration - 1] ?? '';
             return s && e ? `${s}–${e}` : '';
