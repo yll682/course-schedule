@@ -7,8 +7,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/yll682/course-schedule.git"
-# 国内服务器可改用加速地址，例如：
-# REPO_URL="https://ghproxy.com/https://github.com/yll682/course-schedule.git"
+REPO_URL_CN="https://ghproxy.com/https://github.com/yll682/course-schedule.git"
 APP_DIR="/opt/course-schedule"
 APP_USER="courseapp"
 SERVICE_NAME="course-schedule"
@@ -147,16 +146,25 @@ create_user() {
 }
 
 setup_code() {
-    # Git 2.35+ 安全检查：root 操作其他用户所有的目录需要豁免
+    # Git 2.35+ 安全检查
     git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
     # 国内网络 HTTP/2 不稳定，强制用 HTTP/1.1
     git config --global http.version HTTP/1.1 2>/dev/null || true
+
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
-        git -C "$APP_DIR" pull --ff-only
+        if ! git -C "$APP_DIR" pull --ff-only 2>/dev/null; then
+            info "直连失败，尝试 ghproxy 加速..."
+            git -C "$APP_DIR" remote set-url origin "$REPO_URL_CN"
+            git -C "$APP_DIR" pull --ff-only
+            git -C "$APP_DIR" remote set-url origin "$REPO_URL"
+        fi
     else
         info "克隆仓库..."
-        git clone "$REPO_URL" "$APP_DIR"
+        if ! git clone "$REPO_URL" "$APP_DIR" 2>/dev/null; then
+            info "直连失败，尝试 ghproxy 加速..."
+            git clone "$REPO_URL_CN" "$APP_DIR"
+        fi
     fi
     ok "代码就绪"
 }
