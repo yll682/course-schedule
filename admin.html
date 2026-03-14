@@ -153,9 +153,11 @@
             </div>
             <div class="actions">
                 <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出整学期课表</button>
+                <button class="btn btn-default" onclick="clearLocalCache()">清空本地缓存</button>
                 <button class="btn btn-default btn-danger" onclick="doLogout()">退出登录</button>
             </div>
             <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
+            <div id="cache-clear-status" style="font-size:0.82rem;color:#52c41a;margin-top:8px;display:none"></div>
         </div>
 
         <!-- ── 分享码（所有用户）── -->
@@ -329,6 +331,23 @@
             } finally {
                 btn.disabled = false; btn.textContent = '立即抓取所有用户';
             }
+        }
+
+        async function clearLocalCache() {
+            // 清除 Service Worker 缓存
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k)));
+            }
+            // 注销 Service Worker
+            if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(regs.map(r => r.unregister()));
+            }
+            const el = document.getElementById('cache-clear-status');
+            el.textContent = '✓ 本地缓存已清空，页面将刷新';
+            el.style.display = 'block';
+            setTimeout(() => location.reload(true), 800);
         }
 
         async function doLogout() {
