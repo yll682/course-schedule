@@ -26,13 +26,22 @@ app = Flask(__name__, static_folder='.')
 
 _secret = os.environ.get('SECRET_KEY')
 if not _secret:
-    _secret = secrets.token_hex(32)
-    logger.warning('SECRET_KEY 未设置，使用随机密钥（重启后 session 失效）')
+    _key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.secret_key')
+    if os.path.exists(_key_file):
+        with open(_key_file, 'r') as f:
+            _secret = f.read().strip()
+    else:
+        _secret = secrets.token_hex(32)
+        with open(_key_file, 'w') as f:
+            f.write(_secret)
+        logger.info('已生成并保存持久化 secret_key 到 .secret_key')
 app.secret_key = _secret
 
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_PERMANENT=True,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=365),
 )
 CORS(app, supports_credentials=True)
 
@@ -62,7 +71,7 @@ def _rate_limited(ip: str) -> bool:
 # ── 数据库 ────────────────────────────────────────────────────────────────────
 # 禁止通过静态路由直接访问的文件
 _BLOCKED = {
-    'courses.db', '.gitignore', '.env', 'Dockerfile',
+    'courses.db', '.gitignore', '.env', '.secret_key', 'Dockerfile',
     'docker-compose.yml', 'deploy.sh', 'start.bat', 'serve.bat',
 }
 _BLOCKED_EXTS = {'.py', '.db', '.sh', '.bat', '.env', '.cfg', '.ini'}
@@ -279,6 +288,7 @@ def login():
             )
         conn.commit()
 
+    session.permanent = True
     session['username'] = username
     session['is_admin']  = username in ADMIN_USERS
     return jsonify({
@@ -385,7 +395,23 @@ def get_courses(week):
     if share_mode and not (week_min <= week <= week_max):
         return jsonify({'error': f'分享码仅允许查看第 {week_min}~{week_max} 周'}), 403
 
-    # ── 正常抓取逻辑 ──────────────────────────────────────────────────────────
+    # ── 优先读缓存，无缓存时才实时抓取 ──────────────────────────────────────────
+    force = request.args.get('force') == '1'
+
+    if not force and week != 0:
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                      (username, week))
+            cache_row = c.fetchone()
+        if cache_row:
+            return jsonify({
+                **json.loads(cache_row[0]),
+                'from_cache': True,
+                'cache_time': cache_row[1],
+            })
+
+    # 无缓存（或 week=0 需要查当前周，或强制刷新）才去抓取
     cache_row = None
     if week != 0:
         with _db() as conn:
