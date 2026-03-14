@@ -402,13 +402,26 @@ def get_courses(week):
         with _db() as conn:
             c = conn.cursor()
             if week == 0:
-                # 取最近一次缓存的周次作为"当前周"
-                c.execute('SELECT data, cached_at FROM courses WHERE username=? '
+                # 先从最近一次缓存中读取 current_week，再精确取那一周的缓存
+                # 避免返回邻近周数据导致前端周次显示与课表内容不一致
+                c.execute('SELECT data FROM courses WHERE username=? '
                           'ORDER BY cached_at DESC LIMIT 1', (username,))
+                row = c.fetchone()
+                if row:
+                    cur_w = json.loads(row[0]).get('metadata', {}).get('current_week')
+                    if cur_w:
+                        c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                                  (username, cur_w))
+                    else:
+                        c.execute('SELECT data, cached_at FROM courses WHERE username=? '
+                                  'ORDER BY cached_at DESC LIMIT 1', (username,))
+                    cache_row = c.fetchone()
+                else:
+                    cache_row = None
             else:
                 c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
                           (username, week))
-            cache_row = c.fetchone()
+                cache_row = c.fetchone()
         if cache_row:
             return jsonify({
                 **json.loads(cache_row[0]),

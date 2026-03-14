@@ -362,7 +362,13 @@
 
         async function init() {
             await checkAuth();
-            if (!importMode) loadCourses();
+            if (!importMode) {
+                loadCourses();
+                // 每15分钟自动刷新，与后台抓取间隔同步
+                setInterval(() => {
+                    if (!importMode && !adminViewMode) loadCourses();
+                }, 15 * 60 * 1000);
+            }
         }
         init();
     </script>
