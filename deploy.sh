@@ -153,7 +153,7 @@ WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 ExecStart=${APP_DIR}/.venv/bin/gunicorn \\
     --workers 1 \\
-    --bind 0.0.0.0:\${PORT:-5000} \\
+    --bind 127.0.0.1:\${PORT:-5000} \\
     --timeout 60 \\
     --access-logfile - \\
     --error-logfile - \\
