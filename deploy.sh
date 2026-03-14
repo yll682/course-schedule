@@ -2,11 +2,7 @@
 # =============================================================
 # 课程表 · 一键部署 (Debian / Ubuntu)
 #
-# 一行命令完成所有操作：
 #   bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
-#
-# 更新已部署的实例：
-#   bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh) update
 # =============================================================
 set -euo pipefail
 
@@ -14,70 +10,140 @@ REPO_URL="https://github.com/yll682/course-schedule.git"
 APP_DIR="/opt/course-schedule"
 APP_USER="courseapp"
 SERVICE_NAME="course-schedule"
+DEFAULT_PORT="38521"
 
 CYAN='\033[0;36m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; NC='\033[0m'
 info()  { echo -e "${CYAN}▸${NC} $*"; }
 ok()    { echo -e "${GREEN}✓${NC} $*"; }
 warn()  { echo -e "${YELLOW}!${NC} $*"; }
 die()   { echo -e "${RED}✗ $*${NC}"; exit 1; }
-ask()   { echo -en "${BOLD}$*${NC} "; }
 
-[[ $EUID -ne 0 ]] && die "请以 root 运行，例如：sudo bash <(curl ...)"
-MODE="${1:-install}"
+[[ $EUID -ne 0 ]] && die "请以 root 运行：sudo bash <(curl ...)"
 
 # ─────────────────────────────────────────────────────────────
-# 交互式配置（仅在首次安装时询问）
+# 主菜单
 # ─────────────────────────────────────────────────────────────
-interactive_config() {
+main_menu() {
     echo ""
     echo -e "${BOLD}══════════════════════════════════════${NC}"
-    echo -e "${BOLD}  课程表 · 一键部署${NC}"
+    echo -e "${BOLD}      课程表 · 部署管理${NC}"
     echo -e "${BOLD}══════════════════════════════════════${NC}"
     echo ""
 
-    # 端口
-    ask "监听端口 [5000]："
-    read -r input_port
-    PORT="${input_port:-5000}"
-    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
-        die "无效端口：$PORT"
+    # 检测当前状态
+    local status_line=""
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        local port; port=$(grep "^PORT=" "$APP_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "?")
+        status_line="${GREEN}● 运行中${NC}（端口 ${port}）"
+    elif systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+        status_line="${YELLOW}● 已安装，未运行${NC}"
+    else
+        status_line="${CYAN}● 未安装${NC}"
     fi
-
-    # 管理员学号
-    ask "管理员学号（留空则之后手动改 server.py）："
-    read -r input_admin
-    ADMIN_ID="${input_admin:-}"
-
+    echo -e "  当前状态：$status_line"
     echo ""
+    echo -e "  ${BOLD}1)${NC} 安装 / 更新"
+    echo -e "  ${BOLD}2)${NC} 卸载"
+    echo -e "  ${BOLD}3)${NC} 退出"
+    echo ""
+    echo -en "${BOLD}请选择 [1-3]：${NC} "
+    read -r choice
+    echo ""
+
+    case "$choice" in
+        1) do_install ;;
+        2) do_uninstall ;;
+        3) exit 0 ;;
+        *) die "无效选项：$choice" ;;
+    esac
 }
 
 # ─────────────────────────────────────────────────────────────
-# 系统依赖
+# 安装 / 更新流程
+# ─────────────────────────────────────────────────────────────
+do_install() {
+    local is_update=false
+    [[ -d "$APP_DIR/.git" ]] && is_update=true
+
+    PORT="$DEFAULT_PORT"
+    ADMIN_ID=""
+
+    if [[ "$is_update" == false ]]; then
+        # 首次安装才询问配置
+        echo -en "${BOLD}监听端口 [${DEFAULT_PORT}]：${NC} "
+        read -r input_port
+        PORT="${input_port:-$DEFAULT_PORT}"
+        if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1024 || PORT > 65535 )); then
+            die "无效端口：$PORT（范围 1024-65535）"
+        fi
+
+        echo -en "${BOLD}管理员学号（留空则之后手动改 server.py）：${NC} "
+        read -r ADMIN_ID
+        echo ""
+    fi
+
+    install_deps
+    create_user
+    setup_code
+    setup_venv
+    if [[ "$is_update" == false ]]; then
+        setup_env
+        patch_admin
+    fi
+    setup_systemd
+    print_done
+}
+
+# ─────────────────────────────────────────────────────────────
+# 卸载流程
+# ─────────────────────────────────────────────────────────────
+do_uninstall() {
+    if ! systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null && [[ ! -d "$APP_DIR" ]]; then
+        die "未检测到已安装的实例"
+    fi
+
+    echo -e "${RED}此操作将删除服务和所有数据（包括课表数据库）！${NC}"
+    echo -en "${BOLD}确认卸载？输入 yes 继续：${NC} "
+    read -r confirm
+    [[ "$confirm" != "yes" ]] && { info "已取消"; exit 0; }
+
+    echo ""
+    info "停止并删除 systemd 服务..."
+    systemctl stop  "$SERVICE_NAME" 2>/dev/null || true
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload
+
+    info "删除应用目录 $APP_DIR..."
+    rm -rf "$APP_DIR"
+
+    info "删除系统用户 $APP_USER..."
+    userdel "$APP_USER" 2>/dev/null || true
+
+    echo ""
+    ok "卸载完成"
+}
+
+# ─────────────────────────────────────────────────────────────
+# 各步骤函数
 # ─────────────────────────────────────────────────────────────
 install_deps() {
     info "更新软件包列表..."
     apt-get update -qq
-    info "安装系统依赖（git python3 python3-venv）..."
+    info "安装系统依赖..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git python3 python3-venv
     ok "依赖就绪"
 }
 
-# ─────────────────────────────────────────────────────────────
-# 系统用户
-# ─────────────────────────────────────────────────────────────
 create_user() {
     if id "$APP_USER" &>/dev/null; then
         info "用户 $APP_USER 已存在"
     else
-        info "创建系统用户 $APP_USER..."
         useradd --system --no-create-home --shell /usr/sbin/nologin "$APP_USER"
         ok "用户 $APP_USER 创建完成"
     fi
 }
 
-# ─────────────────────────────────────────────────────────────
-# 克隆代码
-# ─────────────────────────────────────────────────────────────
 setup_code() {
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
@@ -86,12 +152,9 @@ setup_code() {
         info "克隆仓库..."
         git clone "$REPO_URL" "$APP_DIR"
     fi
-    ok "代码就绪：$APP_DIR"
+    ok "代码就绪"
 }
 
-# ─────────────────────────────────────────────────────────────
-# 虚拟环境 + 依赖
-# ─────────────────────────────────────────────────────────────
 setup_venv() {
     info "配置 Python 虚拟环境..."
     python3 -m venv "$APP_DIR/.venv"
@@ -100,45 +163,27 @@ setup_venv() {
     ok "Python 依赖安装完成"
 }
 
-# ─────────────────────────────────────────────────────────────
-# .env
-# ─────────────────────────────────────────────────────────────
 setup_env() {
-    ENV_FILE="$APP_DIR/.env"
-    if [[ -f "$ENV_FILE" ]]; then
-        info ".env 已存在，保留原有配置"
-        # 如果端口有变化则更新
-        if ! grep -q "^PORT=${PORT}$" "$ENV_FILE"; then
-            sed -i "s/^PORT=.*/PORT=${PORT}/" "$ENV_FILE"
-            info ".env 中 PORT 已更新为 ${PORT}"
-        fi
-    else
-        info "生成 .env..."
-        SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-        cat > "$ENV_FILE" <<EOF
-SECRET_KEY=${SECRET_KEY}
+    local env_file="$APP_DIR/.env"
+    info "生成 .env..."
+    local secret_key
+    secret_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+    cat > "$env_file" <<EOF
+SECRET_KEY=${secret_key}
 PORT=${PORT}
 FLASK_DEBUG=false
 DB_FILE=${APP_DIR}/courses.db
 EOF
-        chmod 600 "$ENV_FILE"
-        ok ".env 已生成（SECRET_KEY 随机生成）"
-    fi
+    chmod 600 "$env_file"
+    ok ".env 已生成（SECRET_KEY 随机生成）"
 }
 
-# ─────────────────────────────────────────────────────────────
-# 修改管理员学号
-# ─────────────────────────────────────────────────────────────
 patch_admin() {
-    [[ -z "${ADMIN_ID:-}" ]] && return
-    info "设置管理员学号：$ADMIN_ID"
+    [[ -z "$ADMIN_ID" ]] && return
     sed -i "s/ADMIN_USERS = \[.*\]/ADMIN_USERS = ['${ADMIN_ID}']/" "$APP_DIR/server.py"
     ok "管理员学号已设为 $ADMIN_ID"
 }
 
-# ─────────────────────────────────────────────────────────────
-# systemd 服务
-# ─────────────────────────────────────────────────────────────
 setup_systemd() {
     info "配置 systemd 服务..."
     cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
@@ -153,7 +198,7 @@ WorkingDirectory=${APP_DIR}
 EnvironmentFile=${APP_DIR}/.env
 ExecStart=${APP_DIR}/.venv/bin/gunicorn \\
     --workers 1 \\
-    --bind 127.0.0.1:\${PORT:-5000} \\
+    --bind 127.0.0.1:\${PORT} \\
     --timeout 60 \\
     --access-logfile - \\
     --error-logfile - \\
@@ -166,14 +211,11 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
-
     chown -R "$APP_USER:$APP_USER" "$APP_DIR"
     chmod 755 "$APP_DIR"
-
     systemctl daemon-reload
-    systemctl enable --quiet "${SERVICE_NAME}.service"
-    systemctl restart "${SERVICE_NAME}.service"
-
+    systemctl enable --quiet "$SERVICE_NAME"
+    systemctl restart "$SERVICE_NAME"
     sleep 2
     if systemctl is-active --quiet "$SERVICE_NAME"; then
         ok "服务已启动并设为开机自启"
@@ -183,54 +225,19 @@ EOF
     fi
 }
 
-# ─────────────────────────────────────────────────────────────
-# 完成提示
-# ─────────────────────────────────────────────────────────────
 print_done() {
-    local ip
-    ip=$(hostname -I | awk '{print $1}')
+    local port; port=$(grep "^PORT=" "$APP_DIR/.env" | cut -d= -f2)
+    local ip;   ip=$(hostname -I | awk '{print $1}')
     echo ""
     echo -e "${GREEN}══════════════════════════════════════${NC}"
-    echo -e "${GREEN}  部署完成！${NC}"
-    echo -e "  访问地址：${CYAN}http://${ip}:${PORT}${NC}"
+    echo -e "${GREEN}  完成！${NC}"
+    echo -e "  本机地址：${CYAN}http://127.0.0.1:${port}${NC}"
+    echo -e "  内网地址：${CYAN}http://${ip}:${port}${NC}"
     echo ""
     echo -e "  查看日志：${YELLOW}journalctl -u ${SERVICE_NAME} -f${NC}"
-    echo -e "  重启服务：${YELLOW}systemctl restart ${SERVICE_NAME}${NC}"
-    echo -e "  停止服务：${YELLOW}systemctl stop ${SERVICE_NAME}${NC}"
-    echo -e "  更新版本：${YELLOW}bash <(curl -fsSL ${REPO_URL/\.git/}/raw/master/deploy.sh) update${NC}"
     echo -e "${GREEN}══════════════════════════════════════${NC}"
     echo ""
 }
 
 # ─────────────────────────────────────────────────────────────
-# 主流程
-# ─────────────────────────────────────────────────────────────
-case "$MODE" in
-    install)
-        interactive_config
-        install_deps
-        create_user
-        setup_code
-        setup_venv
-        setup_env
-        patch_admin
-        setup_systemd
-        print_done
-        ;;
-    update)
-        info "更新模式..."
-        setup_code
-        setup_venv
-        systemctl restart "${SERVICE_NAME}.service"
-        sleep 2
-        systemctl is-active --quiet "$SERVICE_NAME" \
-            && ok "更新完成，服务已重启" \
-            || die "服务重启失败：journalctl -u $SERVICE_NAME -n 30"
-        ;;
-    *)
-        echo "用法："
-        echo "  首次安装：bash <(curl -fsSL <url>)"
-        echo "  更新代码：bash <(curl -fsSL <url>) update"
-        exit 1
-        ;;
-esac
+main_menu
