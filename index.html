@@ -109,10 +109,41 @@
         .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.72rem, 1.8vw, 0.85rem); height: 100%; overflow: hidden; }
         .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
         .course-info { opacity: 0.8; font-size: clamp(0.67rem, 1.6vw, 0.75rem); line-height: 1.4; }
+        .course { cursor: pointer; }
+        .course:active { filter: brightness(0.93); }
         @media (max-width: 768px) {
             .cell { padding: 4px; }
             .course { padding: 4px 5px; }
         }
+        /* ── 课程详情弹窗 ── */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.45); z-index: 1000;
+            align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--c-surface); border-radius: 12px;
+            padding: 24px 20px 20px; max-width: 360px; width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+            position: relative;
+        }
+        .modal-title {
+            font-size: 1.1rem; font-weight: bold; margin: 0 0 14px;
+            padding-right: 28px; line-height: 1.4; color: var(--c-text);
+        }
+        .modal-row {
+            display: flex; gap: 8px; margin: 6px 0;
+            font-size: 0.9rem; color: var(--c-text);
+        }
+        .modal-row .icon { flex-shrink: 0; width: 20px; }
+        .modal-close {
+            position: absolute; top: 14px; right: 14px;
+            background: none; border: none; cursor: pointer;
+            font-size: 1.2rem; color: var(--c-muted); line-height: 1;
+            padding: 4px;
+        }
+        .modal-close:hover { color: var(--c-text); }
     </style>
 </head>
 <body>
@@ -138,12 +169,48 @@
         <div class="timetable-wrapper"><div class="timetable" id="timetable"></div></div>
     </div>
 
+    <!-- 课程详情弹窗 -->
+    <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+        <div class="modal" id="modal">
+            <button class="modal-close" onclick="closeModal()">✕</button>
+            <div class="modal-title" id="modal-name"></div>
+            <div class="modal-row"><span class="icon">📍</span><span id="modal-location"></span></div>
+            <div class="modal-row"><span class="icon">⏰</span><span id="modal-time"></span></div>
+            <div class="modal-row"><span class="icon">👨‍🏫</span><span id="modal-teacher"></span></div>
+            <div class="modal-row" id="modal-weeks-row"><span class="icon">📅</span><span id="modal-weeks"></span></div>
+        </div>
+    </div>
+
     <script>
         function esc(s) {
             return String(s ?? '')
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
+
+        function openModal(course) {
+            document.getElementById('modal-name').textContent     = course.course_name;
+            document.getElementById('modal-location').textContent = course.location;
+            document.getElementById('modal-time').textContent     = course.time_slots.display;
+            document.getElementById('modal-teacher').textContent  = course.teacher;
+            const weeksRow = document.getElementById('modal-weeks-row');
+            if (course.weeks) {
+                document.getElementById('modal-weeks').textContent = course.weeks + ' 周';
+                weeksRow.style.display = 'flex';
+            } else {
+                weeksRow.style.display = 'none';
+            }
+            document.getElementById('modal-overlay').classList.add('open');
+        }
+
+        function closeModal(e) {
+            if (e && e.target !== document.getElementById('modal-overlay')) return;
+            document.getElementById('modal-overlay').classList.remove('open');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') document.getElementById('modal-overlay').classList.remove('open');
+        });
 
         let currentWeek = 0;
         let maxWeek = 20;
@@ -326,6 +393,9 @@
                 9:'19:00-19:45', 10:'19:55-20:40',
             };
 
+            // 课程数据索引，供点击事件查询
+            window._courseMap = {};
+
             table.innerHTML = '<div class="cell header">节次</div>';
             weekOrder.forEach(day => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
@@ -344,9 +414,10 @@
                     if (course) {
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
+                        window._courseMap[key] = course;
                         table.innerHTML += `
                             <div class="cell" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
-                                <div class="course">
+                                <div class="course" data-key="${esc(key)}">
                                     <div class="course-name">${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
                                     <div class="course-info">⏰ ${esc(course.time_slots.display)}</div>
@@ -359,6 +430,13 @@
                 });
             }
         }
+
+        document.getElementById('timetable').addEventListener('click', e => {
+            const cell = e.target.closest('[data-key]');
+            if (!cell) return;
+            const course = window._courseMap[cell.dataset.key];
+            if (course) openModal(course);
+        });
 
         async function init() {
             await checkAuth();
