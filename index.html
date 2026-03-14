@@ -111,6 +111,11 @@
         .course-info { opacity: 0.8; font-size: clamp(0.60rem, 1.6vw, 0.68rem); line-height: 1.4; }
         .course { cursor: pointer; }
         .course:active { filter: brightness(0.93); }
+        .cell.sep-before::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(to bottom, transparent 1px, var(--c-grid) 1px);
+            z-index: 1;
+        }
         @media (max-width: 768px) {
             .cell { padding: 4px; }
             .course { padding: 4px 5px; }
@@ -428,7 +433,8 @@
 
             const occupied = {};
             for (let slot = 1; slot <= 10; slot++) {
-                table.innerHTML += `<div class="cell time-slot">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
+                const sep = (slot === 5 || slot === 9) ? ' sep-before' : '';
+                table.innerHTML += `<div class="cell time-slot${sep}">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
                 weekOrder.forEach(day => {
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
@@ -440,7 +446,7 @@
                         window._courseMap[key] = course;
                         const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                         table.innerHTML += `
-                            <div class="cell" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
+                            <div class="cell${sep}" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
                                 <div class="course" data-key="${esc(key)}">
                                     <div class="course-name">${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
@@ -449,7 +455,7 @@
                                 </div>
                             </div>`;
                     } else {
-                        table.innerHTML += '<div class="cell"></div>';
+                        table.innerHTML += `<div class="cell${sep}"></div>`;
                     }
                 });
             }
