@@ -92,23 +92,23 @@
         .timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .timetable {
             display: grid;
-            grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
-            grid-auto-rows: 62px;
+            grid-template-columns: var(--col-time, 52px) repeat(7, minmax(var(--col-min, 72px), 1fr));
+            grid-auto-rows: var(--row-h, 62px);
             gap: 1px;
             background: var(--c-grid);
             border: 1px solid var(--c-grid);
-            min-width: 556px;
+            min-width: var(--tbl-min, 556px);
         }
         .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; }
         .header {
             background: var(--c-primary);
             color: white; font-weight: bold; text-align: center;
-            padding: 8px; font-size: clamp(0.72rem, 2vw, 0.9rem);
+            padding: 8px; font-size: var(--font-header, 0.82rem);
         }
-        .time-slot { background: var(--c-subtle); font-size: clamp(0.65rem, 1.6vw, 0.78rem); text-align: center; font-weight: bold; }
-        .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.72rem, 1.8vw, 0.85rem); height: 100%; overflow: hidden; }
+        .time-slot { background: var(--c-subtle); font-size: var(--font-slot, 0.72rem); text-align: center; font-weight: bold; }
+        .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: var(--font-course, 0.80rem); height: 100%; overflow: hidden; }
         .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
-        .course-info { opacity: 0.8; font-size: clamp(0.67rem, 1.6vw, 0.75rem); line-height: 1.4; }
+        .course-info { opacity: 0.8; font-size: var(--font-info, 0.70rem); line-height: 1.4; }
         .course { cursor: pointer; }
         .course:active { filter: brightness(0.93); }
         @media (max-width: 768px) {
@@ -206,24 +206,28 @@
     </div>
 
     <script>
-        // ── 缩放 ── 改变行高和字号，让格子真正变大/小
-        // 行高单位 px，字号单位 rem
+        // ── 缩放 ── 同步调整行高、列宽、字号
         const ZOOM_STEPS = [
-            { row: 36, font: 0.62 },
-            { row: 44, font: 0.68 },
-            { row: 52, font: 0.74 },
-            { row: 62, font: 0.82 },  // 默认
-            { row: 74, font: 0.90 },
-            { row: 88, font: 1.00 },
+            { row: 36, col: 52, colMin: 54,  tblMin: 430, fh: 0.62, fs: 0.60, fc: 0.62, fi: 0.58 },
+            { row: 44, col: 56, colMin: 60,  tblMin: 476, fh: 0.68, fs: 0.65, fc: 0.68, fi: 0.63 },
+            { row: 52, col: 58, colMin: 66,  tblMin: 520, fh: 0.74, fs: 0.70, fc: 0.74, fi: 0.67 },
+            { row: 62, col: 52, colMin: 72,  tblMin: 556, fh: 0.82, fs: 0.72, fc: 0.80, fi: 0.70 }, // 默认
+            { row: 74, col: 58, colMin: 82,  tblMin: 632, fh: 0.90, fs: 0.80, fc: 0.88, fi: 0.78 },
+            { row: 88, col: 64, colMin: 96,  tblMin: 736, fh: 1.00, fs: 0.88, fc: 0.96, fi: 0.86 },
         ];
         let _zoomIdx = parseInt(localStorage.getItem('kcb-zoom') || '3', 10);
 
         function applyZoom() {
-            const t = document.getElementById('timetable');
-            if (!t) return;
-            const { row, font } = ZOOM_STEPS[_zoomIdx];
-            t.style.gridAutoRows = row + 'px';
-            t.style.fontSize = font + 'rem';
+            const z = ZOOM_STEPS[_zoomIdx];
+            const r = document.documentElement.style;
+            r.setProperty('--row-h',      z.row    + 'px');
+            r.setProperty('--col-time',   z.col    + 'px');
+            r.setProperty('--col-min',    z.colMin + 'px');
+            r.setProperty('--tbl-min',    z.tblMin + 'px');
+            r.setProperty('--font-header',z.fh     + 'rem');
+            r.setProperty('--font-slot',  z.fs     + 'rem');
+            r.setProperty('--font-course',z.fc     + 'rem');
+            r.setProperty('--font-info',  z.fi     + 'rem');
         }
 
         function zoom(dir) {
