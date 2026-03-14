@@ -191,7 +191,8 @@
         function openModal(course) {
             document.getElementById('modal-name').textContent     = course.course_name;
             document.getElementById('modal-location').textContent = course.location;
-            document.getElementById('modal-time').textContent     = course.time_slots.display;
+            const t = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
+            document.getElementById('modal-time').textContent     = t || course.time_slots.display;
             document.getElementById('modal-teacher').textContent  = course.teacher;
             const weeksRow = document.getElementById('modal-weeks-row');
             if (course.weeks) {
@@ -220,6 +221,23 @@
         let adminViewMode = false;
         let adminViewUser = null;
         let importWeeksMap = {};
+        let slot34SpecialPattern = '';
+
+        // 标准节次时间
+        const _SLOT_START = {1:'08:30',2:'09:20',3:'10:25',4:'11:15',5:'14:30',6:'15:25',7:'16:20',8:'17:15',9:'19:00',10:'19:55'};
+        const _SLOT_END   = {1:'09:15',2:'10:05',3:'11:10',4:'12:00',5:'15:15',6:'16:10',7:'17:05',8:'18:00',9:'19:45',10:'20:40'};
+        // 特殊教学楼第3、4节时间（覆盖标准值）
+        const _SLOT_START_SP = {3:'10:15', 4:'11:05'};
+        const _SLOT_END_SP   = {3:'11:00', 4:'11:50'};
+
+        function getCourseTime(startSlot, duration, location) {
+            const special = slot34SpecialPattern && location.includes(slot34SpecialPattern);
+            const starts  = special ? {..._SLOT_START, ..._SLOT_START_SP} : _SLOT_START;
+            const ends    = special ? {..._SLOT_END,   ..._SLOT_END_SP}   : _SLOT_END;
+            const s = starts[startSlot] ?? '';
+            const e = ends[startSlot + duration - 1] ?? '';
+            return s && e ? `${s}–${e}` : '';
+        }
 
         const _params = new URLSearchParams(window.location.search);
         adminViewUser = _params.get('as') || null;
@@ -242,6 +260,10 @@
             const resp = await fetch('/api/user', { credentials: 'include' });
             const data = await resp.json();
             if (!data.logged_in) { window.location.href = '/login.html'; return; }
+
+            if (data.slot34_special_pattern !== undefined) {
+                slot34SpecialPattern = data.slot34_special_pattern;
+            }
 
             if (data.is_share_mode) {
                 isShareMode  = true;
@@ -415,12 +437,13 @@
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         window._courseMap[key] = course;
+                        const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                         table.innerHTML += `
                             <div class="cell" style="grid-row: span ${Math.max(1, Math.min(10, duration))}">
                                 <div class="course" data-key="${esc(key)}">
                                     <div class="course-name">${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
-                                    <div class="course-info">⏰ ${esc(course.time_slots.display)}</div>
+                                    <div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
                                 </div>
                             </div>`;

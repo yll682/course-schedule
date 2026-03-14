@@ -213,6 +213,11 @@
                 <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
                 <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30-120 分钟。</div>
             </div>
+            <div class="field">
+                <label>第3、4节特殊时间教学楼标识</label>
+                <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
+                <div class="hint">地点包含此字符串时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。留空则不启用。</div>
+            </div>
             <div class="actions">
                 <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
                 <span class="save-status" id="admin-save-status">✓ 已保存</span>
@@ -270,10 +275,15 @@
                 document.getElementById('admin-card').style.display = 'block';
                 document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
+                document.getElementById('slot34_special_pattern').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
                 loadAdminShares();
                 loadUsers();
+            }
+
+            if (data.slot34_special_pattern !== undefined) {
+                document.getElementById('slot34_special_pattern').value = data.slot34_special_pattern;
             }
 
             loadShares();
@@ -284,6 +294,7 @@
             if (isNaN(val) || val < 5 || val > 1440) {
                 alert('间隔必须在 5 到 1440 分钟之间'); return;
             }
+            const pattern = document.getElementById('slot34_special_pattern').value.trim();
             const btn = document.getElementById('save-admin-btn');
             btn.disabled = true; btn.textContent = '保存中…';
             try {
@@ -291,7 +302,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ fetch_interval: val }),
+                    body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern }),
                 });
                 const data = await resp.json();
                 if (data.success) {

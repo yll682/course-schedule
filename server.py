@@ -310,6 +310,8 @@ def logout():
 
 @app.route('/api/user', methods=['GET'])
 def get_user():
+    slot34_pattern = get_setting('slot34_special_pattern', '')
+
     # 分享浏览模式
     if 'share_token' in session:
         token = session['share_token']
@@ -335,12 +337,13 @@ def get_user():
             r = c.fetchone()
         owner_name = (r[0] or owner) if r else owner
         return jsonify({
-            'logged_in':        True,
-            'is_share_mode':    True,
-            'owner_name':       owner_name,
-            'share_week_from':  week_from,
-            'share_week_to':    week_to,
-            'share_expires_at': expires_at,
+            'logged_in':              True,
+            'is_share_mode':          True,
+            'owner_name':             owner_name,
+            'share_week_from':        week_from,
+            'share_week_to':          week_to,
+            'share_expires_at':       expires_at,
+            'slot34_special_pattern': slot34_pattern,
         })
 
     if 'username' not in session:
@@ -352,10 +355,11 @@ def get_user():
         row = c.fetchone()
     name = (row[0] or username) if row else username
     return jsonify({
-        'logged_in': True,
-        'username':  username,
-        'name':      name,
-        'is_admin':  session.get('is_admin', False),
+        'logged_in':              True,
+        'username':               username,
+        'name':                   name,
+        'is_admin':               session.get('is_admin', False),
+        'slot34_special_pattern': slot34_pattern,
     })
 
 
@@ -487,6 +491,13 @@ def settings():
             with _db() as conn:
                 conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
                              ('fetch_interval', str(interval)))
+                conn.commit()
+        # slot34_special_pattern：管理员专属
+        if 'slot34_special_pattern' in data and is_admin:
+            pattern = str(data['slot34_special_pattern']).strip()
+            with _db() as conn:
+                conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
+                             ('slot34_special_pattern', pattern))
                 conn.commit()
         return jsonify({'success': True})
 
