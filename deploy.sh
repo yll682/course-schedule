@@ -7,6 +7,8 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/yll682/course-schedule.git"
+# 国内服务器可改用加速地址，例如：
+# REPO_URL="https://ghproxy.com/https://github.com/yll682/course-schedule.git"
 APP_DIR="/opt/course-schedule"
 APP_USER="courseapp"
 SERVICE_NAME="course-schedule"

@@ -25,8 +25,15 @@
 **要求：** Debian / Ubuntu，root 权限
 
 ```bash
+# 直连 GitHub（国际服务器）
 bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 ```
+
+> **国内服务器访问慢？** 用 ghproxy 加速：
+> ```bash
+> bash <(curl -fsSL https://ghproxy.com/https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
+> ```
+> ghproxy 偶尔不稳定，备用地址：`https://mirror.ghproxy.com/` 或 `https://ghp.ci/`，替换开头即可。
 
 运行后出现菜单，选择操作：
 
