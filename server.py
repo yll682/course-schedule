@@ -438,11 +438,11 @@ def get_courses(week):
                           (username, week))
                 cache_row = c.fetchone()
         if cache_row:
-            # 缓存超过 15 分钟视为过期，走实时抓取（失败仍回退旧缓存）
+            # 缓存超过抓取间隔视为过期，走实时抓取（失败仍回退旧缓存）
             stale = False
             try:
                 age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
-                if age > 15 * 60:
+                if age > get_setting('fetch_interval', 60) * 60:
                     stale = True
             except (ValueError, TypeError):
                 stale = True
