@@ -660,6 +660,53 @@ def admin_view(target_user, week):
     return jsonify({**json.loads(row[0]), 'from_cache': True, 'cache_time': row[1]})
 
 
+@app.route('/api/admin/force_fetch', methods=['POST'])
+def admin_force_fetch():
+    """管理员触发立即为所有用户抓取课表（后台执行，失败保留缓存）"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    def _run():
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT username FROM users WHERE password_enc IS NOT NULL')
+            users = [row[0] for row in c.fetchall()]
+
+        ok_count = 0
+        fail_count = 0
+        for username in users:
+            try:
+                data = fetch_from_jw(username, 0)
+                current_week = data['metadata']['current_week']
+                max_week     = data['metadata']['max_week']
+                with _db() as conn:
+                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                 (username, current_week,
+                                  json.dumps(data, ensure_ascii=False),
+                                  datetime.now().isoformat()))
+                    conn.commit()
+                for w in [current_week - 1, current_week + 1]:
+                    if 1 <= w <= max_week:
+                        try:
+                            d = fetch_from_jw(username, w)
+                            with _db() as conn:
+                                conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                             (username, w,
+                                              json.dumps(d, ensure_ascii=False),
+                                              datetime.now().isoformat()))
+                                conn.commit()
+                        except Exception as e:
+                            logger.warning('强制抓取失败 user=%s week=%d: %s', username, w, e)
+                ok_count += 1
+            except Exception as e:
+                fail_count += 1
+                logger.error('强制抓取失败 user=%s: %s', username, e)
+        logger.info('强制抓取完成：成功 %d 人，失败 %d 人', ok_count, fail_count)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({'success': True, 'message': '已在后台开始抓取，请稍后刷新查看'})
+
+
 if __name__ == '__main__':
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     port  = int(os.environ.get('PORT', 5000))

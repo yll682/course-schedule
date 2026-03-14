@@ -139,7 +139,7 @@
         <div class="page-header">
             <button class="btn btn-default" onclick="location.href='/'" style="padding:5px 12px">← 返回</button>
             <h1 class="page-title">⚙️ 设置</h1>
-            <span class="user-label" id="user-info">加载中...</span>
+            <span class="user-label" id="user-info"></span>
         </div>
 
         <!-- ── 账户（所有用户）── -->
@@ -213,6 +213,7 @@
             <div class="actions">
                 <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
                 <span class="save-status" id="admin-save-status">✓ 已保存</span>
+                <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
             </div>
 
             <!-- 分享码管理 -->
@@ -256,8 +257,7 @@
             const userResp = await fetch('/api/user', { credentials: 'include' });
             const user = await userResp.json();
             const adminLabel = isAdmin ? ' · <span style="color:#cf1322">管理员</span>' : '';
-            document.getElementById('user-info').innerHTML =
-                `${esc(user.name || user.username)} (${esc(user.username)})${adminLabel}`;
+            document.getElementById('user-info').textContent = '';
 
             if (data.fetch_interval) {
                 document.getElementById('fetch_interval').value = data.fetch_interval;
@@ -268,6 +268,7 @@
                 document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
+                document.getElementById('force-fetch-btn').disabled = false;
                 loadAdminShares();
                 loadUsers();
             }
@@ -297,6 +298,22 @@
                 }
             } finally {
                 btn.disabled = false; btn.textContent = '保存';
+            }
+        }
+
+        async function forceFetch() {
+            const btn = document.getElementById('force-fetch-btn');
+            btn.disabled = true; btn.textContent = '抓取中…';
+            try {
+                const resp = await fetch('/api/admin/force_fetch', {
+                    method: 'POST', credentials: 'include',
+                });
+                const data = await resp.json();
+                alert(data.message || (data.error ? `失败：${data.error}` : '已触发'));
+            } catch (e) {
+                alert('请求失败，请重试');
+            } finally {
+                btn.disabled = false; btn.textContent = '立即抓取所有用户';
             }
         }
 
