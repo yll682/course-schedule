@@ -14,6 +14,17 @@ from flask_cors import CORS
 
 import jw_client
 
+# ── 全局锁 ────────────────────────────────────────────────────────────────────
+_token_refresh_locks = {}  # username -> Lock
+_token_locks_lock = threading.Lock()
+
+def _get_user_lock(username: str) -> threading.Lock:
+    """获取用户专属的 token 刷新锁"""
+    with _token_locks_lock:
+        if username not in _token_refresh_locks:
+            _token_refresh_locks[username] = threading.Lock()
+        return _token_refresh_locks[username]
+
 # ── 日志 ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +53,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_PERMANENT=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=365),
+    MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 限制请求大小为 16MB
 )
 CORS(app, supports_credentials=True)
 
@@ -58,15 +70,28 @@ def set_security_headers(response):
 
 # ── 登录频率限制（5次/分钟/IP） ────────────────────────────────────────────────
 _login_attempts: dict = defaultdict(list)
+_login_attempts_lock = threading.Lock()
+_last_cleanup = time_module.time()
 
 def _rate_limited(ip: str) -> bool:
+    global _last_cleanup
     now = time_module.time()
-    times = [t for t in _login_attempts[ip] if now - t < 60]
-    _login_attempts[ip] = times
-    if len(times) >= 5:
-        return True
-    _login_attempts[ip].append(now)
-    return False
+
+    with _login_attempts_lock:
+        # 每 5 分钟清理一次过期的 IP 记录
+        if now - _last_cleanup > 300:
+            expired_ips = [k for k, v in _login_attempts.items()
+                          if not v or now - v[-1] > 300]
+            for k in expired_ips:
+                del _login_attempts[k]
+            _last_cleanup = now
+
+        times = [t for t in _login_attempts[ip] if now - t < 60]
+        _login_attempts[ip] = times
+        if len(times) >= 5:
+            return True
+        _login_attempts[ip].append(now)
+        return False
 
 # ── 数据库 ────────────────────────────────────────────────────────────────────
 # 禁止通过静态路由直接访问的文件
@@ -78,7 +103,7 @@ _BLOCKED_EXTS = {'.py', '.db', '.sh', '.bat', '.env', '.cfg', '.ini'}
 
 @contextmanager
 def _db():
-    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn = sqlite3.connect(DB_FILE, timeout=30)  # 增加超时时间到 30 秒
     try:
         yield conn
     finally:
@@ -109,8 +134,10 @@ def init_db():
         ]:
             try:
                 c.execute(f'ALTER TABLE users ADD COLUMN {col_def}')
-            except Exception:
-                pass
+            except sqlite3.OperationalError as e:
+                # 忽略"列已存在"错误，其他错误记录日志
+                if 'duplicate column name' not in str(e).lower():
+                    logger.warning('数据库迁移警告: %s', e)
         conn.commit()
 
 
@@ -134,51 +161,53 @@ def get_setting(key, default):
 
 # ── Token 管理 ────────────────────────────────────────────────────────────────
 def _ensure_token(username: str):
-    with _db() as conn:
-        c = conn.cursor()
-        c.execute(
-            'SELECT jw_token, token_time, password_enc, jw_name, jw_class, jw_kbjcmsid '
-            'FROM users WHERE username=?',
-            (username,),
-        )
-        row = c.fetchone()
-
-    if not row or not row[2]:
-        raise RuntimeError('未找到用户凭据，请重新登录')
-
-    token, token_time_str, password_enc, jw_name, jw_class, kbjcmsid = row
-    user_info = {
-        'name':    jw_name or username,
-        'userNo':  username,
-        'clsName': jw_class or '',
-    }
-
-    need_refresh = True
-    if token and token_time_str:
-        try:
-            dt = datetime.fromisoformat(token_time_str)
-            if (datetime.now() - dt).total_seconds() < 3.5 * 3600:
-                need_refresh = False
-        except ValueError:
-            logger.warning('token_time 格式异常 user=%s value=%s', username, token_time_str)
-
-    if need_refresh:
-        password = jw_client.decrypt_from_storage(password_enc)
-        info  = jw_client.login(username, password)
-        token = info['token']
+    # 使用用户级别的锁防止并发刷新
+    with _get_user_lock(username):
         with _db() as conn:
-            conn.execute('UPDATE users SET jw_token=?, token_time=? WHERE username=?',
-                         (token, datetime.now().isoformat(), username))
-            conn.commit()
+            c = conn.cursor()
+            c.execute(
+                'SELECT jw_token, token_time, password_enc, jw_name, jw_class, jw_kbjcmsid '
+                'FROM users WHERE username=?',
+                (username,),
+            )
+            row = c.fetchone()
 
-    if not kbjcmsid:
-        kbjcmsid = jw_client.get_kbjcmsid(token)
-        with _db() as conn:
-            conn.execute('UPDATE users SET jw_kbjcmsid=? WHERE username=?',
-                         (kbjcmsid, username))
-            conn.commit()
+        if not row or not row[2]:
+            raise RuntimeError('未找到用户凭据，请重新登录')
 
-    return token, kbjcmsid, user_info
+        token, token_time_str, password_enc, jw_name, jw_class, kbjcmsid = row
+        user_info = {
+            'name':    jw_name or username,
+            'userNo':  username,
+            'clsName': jw_class or '',
+        }
+
+        need_refresh = True
+        if token and token_time_str:
+            try:
+                dt = datetime.fromisoformat(token_time_str)
+                if (datetime.now() - dt).total_seconds() < 3.5 * 3600:
+                    need_refresh = False
+            except ValueError:
+                logger.warning('token_time 格式异常 user=%s value=%s', username, token_time_str)
+
+        if need_refresh:
+            password = jw_client.decrypt_from_storage(password_enc)
+            info  = jw_client.login(username, password)
+            token = info['token']
+            with _db() as conn:
+                conn.execute('UPDATE users SET jw_token=?, token_time=? WHERE username=?',
+                             (token, datetime.now().isoformat(), username))
+                conn.commit()
+
+        if not kbjcmsid:
+            kbjcmsid = jw_client.get_kbjcmsid(token)
+            with _db() as conn:
+                conn.execute('UPDATE users SET jw_kbjcmsid=? WHERE username=?',
+                             (kbjcmsid, username))
+                conn.commit()
+
+        return token, kbjcmsid, user_info
 
 
 # ── 课表抓取 ──────────────────────────────────────────────────────────────────
@@ -191,6 +220,9 @@ def fetch_from_jw(username: str, week: int) -> dict:
 
 
 # ── 后台定时抓取 ──────────────────────────────────────────────────────────────
+# 用户失败计数，连续失败 3 次后跳过
+_user_fail_counts = defaultdict(int)
+
 def background_fetch():
     while True:
         try:
@@ -200,6 +232,11 @@ def background_fetch():
                 users = [row[0] for row in c.fetchall()]
 
             for username in users:
+                # 连续失败 3 次后跳过该用户
+                if _user_fail_counts[username] >= 3:
+                    logger.info('跳过连续失败用户 user=%s', username)
+                    continue
+
                 try:
                     data = fetch_from_jw(username, 0)
                     current_week = data['metadata']['current_week']
@@ -223,9 +260,18 @@ def background_fetch():
                                                   datetime.now().isoformat()))
                                     conn.commit()
                             except Exception as e:
-                                logger.warning('后台抓取失败 user=%s week=%d: %s', username, w, e)
+                                logger.info('后台抓取邻近周失败 user=%s week=%d: %s', username, w, e)
+
+                    # 成功后重置失败计数
+                    _user_fail_counts[username] = 0
+
                 except Exception as e:
-                    logger.error('后台抓取失败 user=%s: %s', username, e)
+                    _user_fail_counts[username] += 1
+                    if _user_fail_counts[username] >= 3:
+                        logger.warning('后台抓取连续失败 user=%s 失败次数=%d: %s',
+                                      username, _user_fail_counts[username], e)
+                    else:
+                        logger.info('后台抓取失败 user=%s: %s', username, e)
 
         except Exception as e:
             logger.error('后台定时任务异常: %s', e)
@@ -647,15 +693,24 @@ def share_create():
     except (ValueError, TypeError):
         return jsonify({'error': '无效的周次'}), 400
 
-    token = secrets.token_hex(4).upper()
-    with _db() as conn:
-        conn.execute(
-            'INSERT INTO share_tokens '
-            '(token, owner, week_from, week_to, expires_at, created_at, revoked) '
-            'VALUES (?, ?, ?, ?, ?, ?, 0)',
-            (token, username, week_from, week_to, expires_at, datetime.now().isoformat()),
-        )
-        conn.commit()
+    # 重试机制：最多尝试 5 次生成不冲突的 token
+    for attempt in range(5):
+        token = secrets.token_hex(4).upper()
+        try:
+            with _db() as conn:
+                conn.execute(
+                    'INSERT INTO share_tokens '
+                    '(token, owner, week_from, week_to, expires_at, created_at, revoked) '
+                    'VALUES (?, ?, ?, ?, ?, ?, 0)',
+                    (token, username, week_from, week_to, expires_at, datetime.now().isoformat()),
+                )
+                conn.commit()
+            break
+        except sqlite3.IntegrityError:
+            if attempt == 4:
+                logger.error('分享码生成失败：5 次尝试均冲突 user=%s', username)
+                return jsonify({'error': '生成分享码失败，请重试'}), 500
+            continue
 
     return jsonify({
         'success':    True,

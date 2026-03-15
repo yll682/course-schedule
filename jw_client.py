@@ -6,6 +6,7 @@
 """
 import base64
 import json
+import os
 import requests
 from datetime import datetime
 from Crypto.Cipher import AES
@@ -13,6 +14,9 @@ from Crypto.Util.Padding import pad, unpad
 
 BASE_URL = "http://59.57.242.167:81/njwhd"
 AES_KEY  = b"qzkj1kjghd=876&*"
+
+# 本地存储加密使用独立密钥（从环境变量读取，未设置则使用默认值）
+STORAGE_KEY = os.environ.get('STORAGE_AES_KEY', 'local_storage_key_32_bytes!!').encode()[:16]
 
 WEEKDAY_MAP = {
     "1": "周一", "2": "周二", "3": "周三", "4": "周四",
@@ -33,14 +37,14 @@ def encrypt_password(password: str) -> str:
 # ── 本地存储加密（DB 中不明文存密码） ─────────────────────────────────────────
 
 def encrypt_for_storage(password: str) -> str:
-    ciphertext = AES.new(AES_KEY, AES.MODE_ECB).encrypt(
+    ciphertext = AES.new(STORAGE_KEY, AES.MODE_ECB).encrypt(
         pad(password.encode("utf-8"), 16))
     return base64.b64encode(ciphertext).decode()
 
 
 def decrypt_from_storage(enc: str) -> str:
     ciphertext = base64.b64decode(enc)
-    return unpad(AES.new(AES_KEY, AES.MODE_ECB).decrypt(ciphertext), 16).decode("utf-8")
+    return unpad(AES.new(STORAGE_KEY, AES.MODE_ECB).decrypt(ciphertext), 16).decode("utf-8")
 
 
 # ── 登录 ──────────────────────────────────────────────────────────────────────
@@ -51,7 +55,7 @@ def login(username: str, password: str) -> dict:
     Token 有效期约 4 小时，过期后重新调用即可。
     """
     # 必须先查一次验证码配置，否则部分环境下登录失败
-    requests.post(f"{BASE_URL}/retrievePwd", params={"type": "cx"}, timeout=10)
+    requests.post(f"{BASE_URL}/retrievePwd", params={"type": "cx"}, timeout=(5, 10))
 
     resp = requests.post(
         f"{BASE_URL}/login",
@@ -62,7 +66,7 @@ def login(username: str, password: str) -> dict:
             "captchaData": "",
             "codeVal":     "",
         },
-        timeout=10,
+        timeout=(5, 10),
     )
     resp.raise_for_status()
     data = resp.json()
@@ -83,9 +87,13 @@ def _session(token: str) -> requests.Session:
 
 def get_kbjcmsid(token: str) -> str:
     """获取当前学期主校历 ID（取 mrms='1' 的那条）"""
-    resp = _session(token).post(f"{BASE_URL}/Get_sjkbms", timeout=10)
+    resp = _session(token).post(f"{BASE_URL}/Get_sjkbms", timeout=(5, 10))
     resp.raise_for_status()
-    return next(x["kbjcmsid"] for x in resp.json()["data"] if x["mrms"] == "1")
+    data = resp.json().get("data", [])
+    for x in data:
+        if x.get("mrms") == "1":
+            return x["kbjcmsid"]
+    raise RuntimeError("未找到默认学期校历（mrms='1'），请联系管理员")
 
 
 def get_timetable_raw(token: str, week, kbjcmsid: str) -> dict:
@@ -100,7 +108,7 @@ def get_timetable_raw(token: str, week, kbjcmsid: str) -> dict:
     resp = _session(token).post(
         f"{BASE_URL}/student/curriculum",
         params=params,
-        timeout=10,
+        timeout=(5, 10),
     )
     resp.raise_for_status()
     return resp.json()["data"][0]
