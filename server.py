@@ -18,12 +18,41 @@ import jw_client
 _token_refresh_locks = {}  # username -> Lock
 _token_locks_lock = threading.Lock()
 
+# 记录正在进行的刷新任务，避免重复启动
+_active_refresh_tasks = {}  # (username, week) -> timestamp
+_refresh_tasks_lock = threading.Lock()
+
 def _get_user_lock(username: str) -> threading.Lock:
     """获取用户专属的 token 刷新锁"""
     with _token_locks_lock:
         if username not in _token_refresh_locks:
             _token_refresh_locks[username] = threading.Lock()
         return _token_refresh_locks[username]
+
+def _is_refreshing(username: str, week: int) -> bool:
+    """检查是否已有刷新任务在进行"""
+    with _refresh_tasks_lock:
+        key = (username, week)
+        if key in _active_refresh_tasks:
+            # 如果任务超过30秒还没完成，认为已失败，允许重新启动
+            age = time_module.time() - _active_refresh_tasks[key]
+            if age < 30:
+                return True
+            else:
+                del _active_refresh_tasks[key]
+        return False
+
+def _mark_refreshing(username: str, week: int):
+    """标记刷新任务开始"""
+    with _refresh_tasks_lock:
+        _active_refresh_tasks[(username, week)] = time_module.time()
+
+def _unmark_refreshing(username: str, week: int):
+    """标记刷新任务完成"""
+    with _refresh_tasks_lock:
+        key = (username, week)
+        if key in _active_refresh_tasks:
+            del _active_refresh_tasks[key]
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -431,6 +460,9 @@ def _async_refresh_course(username: str, week: int):
         logger.info('后台刷新成功 user=%s week=%s', username, week)
     except Exception as e:
         logger.info('后台刷新失败 user=%s week=%s: %s', username, week, e)
+    finally:
+        # 无论成功失败，都要清除刷新标记
+        _unmark_refreshing(username, week)
 
 
 @app.route('/api/courses/<int:week>', methods=['GET'])
@@ -504,6 +536,9 @@ def get_courses(week):
     if cache_row and not force:
         # 检查缓存是否过期
         should_refresh = False
+        is_refreshing = False
+        refresh_week = actual_week_for_zero if week == 0 else week
+
         try:
             age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
             # 缓存超过抓取间隔的一半就触发后台刷新（fetch_interval单位是分钟，需转换成秒）
@@ -511,24 +546,30 @@ def get_courses(week):
             if age > threshold:
                 should_refresh = True
                 logger.info('缓存过期触发刷新 user=%s week=%s age=%.1fs threshold=%.1fs',
-                           username, actual_week_for_zero if week == 0 else week, age, threshold)
+                           username, refresh_week, age, threshold)
         except (ValueError, TypeError):
             should_refresh = True
 
-        # 触发后台异步刷新（不阻塞用户请求）
+        # 检查是否已有刷新任务在进行
         if should_refresh and not share_mode:
-            threading.Thread(
-                target=_async_refresh_course,
-                args=(username, actual_week_for_zero if week == 0 else week),
-                daemon=True
-            ).start()
+            is_refreshing = _is_refreshing(username, refresh_week)
+            if not is_refreshing:
+                # 标记刷新任务开始
+                _mark_refreshing(username, refresh_week)
+                # 启动后台刷新线程
+                threading.Thread(
+                    target=_async_refresh_course,
+                    args=(username, refresh_week),
+                    daemon=True
+                ).start()
+                is_refreshing = True
 
         # 立即返回缓存数据
         return jsonify({
             **json.loads(cache_row[0]),
             'from_cache': True,
             'cache_time': cache_row[1],
-            'refreshing': should_refresh,
+            'refreshing': is_refreshing,
         })
 
     # ── 无缓存或强制刷新：同步获取 ──────────────────────────────────────────────
