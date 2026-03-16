@@ -438,10 +438,14 @@
             }
         }
 
-        async function loadCourses() {
+        let refreshPollTimer = null;
+
+        async function loadCourses(silent = false) {
             if (importMode) return;
-            document.getElementById('timetable').innerHTML =
-                '<div style="grid-column:1/-1;padding:20px;text-align:center;color:#999">加载中...</div>';
+            if (!silent) {
+                document.getElementById('timetable').innerHTML =
+                    '<div style="grid-column:1/-1;padding:20px;text-align:center;color:#999">加载中...</div>';
+            }
             try {
                 const url = adminViewMode
                     ? `/api/admin/view/${encodeURIComponent(adminViewUser)}/${currentWeek}`
@@ -473,14 +477,37 @@
                     w.style.display = 'block';
                     w.style.color = '#d46b08';
                     w.textContent = `⚠️ 实时获取失败，显示缓存课表（${t}）`;
+                } else if (data.refreshing) {
+                    // 后台正在刷新，显示提示并启动轮询
+                    const t = new Date(data.cache_time).toLocaleString();
+                    w.style.display = 'block';
+                    w.style.color = '#1890ff';
+                    w.textContent = `🔄 正在后台更新课表...（当前缓存：${t}）`;
+                    startRefreshPolling();
                 } else {
                     w.style.display = 'none';
+                    stopRefreshPolling();
                 }
 
                 renderCourses(data);
             } catch (e) {
                 document.getElementById('timetable').innerHTML =
                     '<div style="grid-column:1/-1;padding:20px;text-align:center;color:red">加载失败，请刷新重试</div>';
+            }
+        }
+
+        function startRefreshPolling() {
+            if (refreshPollTimer || adminViewMode) return;
+            // 每3秒轮询一次，检查后台刷新是否完成
+            refreshPollTimer = setInterval(() => {
+                loadCourses(true); // silent模式，不显示"加载中"
+            }, 3000);
+        }
+
+        function stopRefreshPolling() {
+            if (refreshPollTimer) {
+                clearInterval(refreshPollTimer);
+                refreshPollTimer = null;
             }
         }
 
