@@ -534,22 +534,44 @@
                     const key = `${day}-${slot}`;
                     if (occupied[key]) return;
                     const dayData = data.完整课表.find(d => d.weekday === day);
-                    const course  = dayData && dayData.courses.find(c => c.time_slots.start_slot === slot);
-                    if (course) {
+
+                    // 查找所有在当前slot开始或覆盖当前slot的课程
+                    const overlappingCourses = dayData ? dayData.courses.filter(c => {
+                        const start = c.time_slots.start_slot;
+                        const end = start + c.time_slots.duration - 1;
+                        return start <= slot && slot <= end;
+                    }) : [];
+
+                    // 找出真正从当前slot开始的课程
+                    const coursesStartingHere = overlappingCourses.filter(c => c.time_slots.start_slot === slot);
+
+                    if (coursesStartingHere.length > 0) {
+                        // 有课程从这个slot开始
+                        const course = coursesStartingHere[0]; // 先渲染第一门课
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
                         window._courseMap[key] = course;
                         const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                         const endGr = slotRow(slot + duration - 1) + 1;
+
+                        // 如果有多门课程重叠，显示警告标记
+                        const conflictMark = coursesStartingHere.length > 1 ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
+
                         table.innerHTML += `
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
-                                <div class="course" data-key="${esc(key)}">
-                                    <div class="course-name">${esc(course.course_name)}</div>
+                                <div class="course" data-key="${esc(key)}" style="${coursesStartingHere.length > 1 ? 'border-left-color:#ff4d4f;' : ''}">
+                                    <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
                                     <div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
+                                    ${coursesStartingHere.length > 1 ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${coursesStartingHere.length - 1}门冲突</div>` : ''}
                                 </div>
                             </div>`;
+
+                        // 将所有重叠的课程都存储起来，供点击查看
+                        if (coursesStartingHere.length > 1) {
+                            window._courseMap[key] = coursesStartingHere; // 存储数组
+                        }
                     } else {
                         table.innerHTML += `<div class="cell" style="grid-row:${gr};grid-column:${gc}"></div>`;
                     }
@@ -560,18 +582,63 @@
         document.getElementById('timetable').addEventListener('click', e => {
             const cell = e.target.closest('[data-key]');
             if (!cell) return;
-            const course = window._courseMap[cell.dataset.key];
-            if (course) openModal(course);
+            const courseData = window._courseMap[cell.dataset.key];
+            if (!courseData) return;
+
+            // 如果是数组，说明有多门课程冲突
+            if (Array.isArray(courseData)) {
+                // 显示所有冲突课程的列表
+                let html = '<div style="max-height:400px;overflow-y:auto">';
+                courseData.forEach((course, idx) => {
+                    const t = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
+                    html += `
+                        <div style="padding:12px;margin-bottom:10px;background:var(--c-subtle);border-radius:6px;border-left:3px solid ${idx === 0 ? 'var(--c-accent)' : '#ff4d4f'}">
+                            <div style="font-weight:bold;margin-bottom:6px">${esc(course.course_name)}</div>
+                            <div style="font-size:0.85rem;line-height:1.6">
+                                📍 ${esc(course.location)}<br>
+                                ⏰ ${esc(t || course.time_slots.display)}<br>
+                                👨‍🏫 ${esc(course.teacher)}<br>
+                                📅 ${esc(course.weeks)} 周
+                            </div>
+                        </div>`;
+                });
+                html += '</div>';
+
+                document.getElementById('modal-name').textContent = '⚠️ 课程时间冲突';
+                document.getElementById('modal').innerHTML = `
+                    <button class="modal-close" onclick="closeModal()">✕</button>
+                    <div class="modal-title">⚠️ 课程时间冲突（${courseData.length}门）</div>
+                    ${html}
+                `;
+                document.getElementById('modal-overlay').classList.add('open');
+            } else {
+                // 单门课程，正常显示
+                openModal(courseData);
+            }
         });
 
         async function init() {
             await checkAuth();
             if (!importMode) {
                 loadCourses();
-                // 每15分钟自动刷新，与后台抓取间隔同步
+
+                // 获取后端的刷新间隔设置，前端自动刷新间隔设为后端的一半
+                let refreshInterval = 15 * 60 * 1000; // 默认15分钟
+                try {
+                    const resp = await fetch('/api/settings', { credentials: 'include' });
+                    const data = await resp.json();
+                    if (data.fetch_interval) {
+                        // fetch_interval单位是分钟，前端刷新间隔设为其一半
+                        refreshInterval = parseInt(data.fetch_interval) * 60 * 1000 / 2;
+                    }
+                } catch (e) {
+                    console.warn('获取刷新间隔设置失败，使用默认值', e);
+                }
+
+                // 定期自动刷新
                 setInterval(() => {
                     if (!importMode && !adminViewMode) loadCourses();
-                }, 15 * 60 * 1000);
+                }, refreshInterval);
             }
         }
         init();

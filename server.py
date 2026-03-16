@@ -506,9 +506,12 @@ def get_courses(week):
         should_refresh = False
         try:
             age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
-            # 缓存超过抓取间隔的一半就触发后台刷新
-            if age > get_setting('fetch_interval', 60) * 30:
+            # 缓存超过抓取间隔的一半就触发后台刷新（fetch_interval单位是分钟，需转换成秒）
+            threshold = get_setting('fetch_interval', 60) * 60 / 2
+            if age > threshold:
                 should_refresh = True
+                logger.info('缓存过期触发刷新 user=%s week=%s age=%.1fs threshold=%.1fs',
+                           username, actual_week_for_zero if week == 0 else week, age, threshold)
         except (ValueError, TypeError):
             should_refresh = True
 
