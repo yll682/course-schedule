@@ -416,23 +416,6 @@ def get_user():
     })
 
 
-def _async_refresh_course(username: str, week: int):
-    """后台异步刷新课表数据"""
-    try:
-        course_data = fetch_from_jw(username, week)
-        actual_week = course_data['metadata']['current_week'] if week == 0 else week
-
-        with _db() as conn:
-            conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
-                         (username, actual_week,
-                          json.dumps(course_data, ensure_ascii=False),
-                          datetime.now().isoformat()))
-            conn.commit()
-        logger.info('后台刷新成功 user=%s week=%s', username, week)
-    except Exception as e:
-        logger.info('后台刷新失败 user=%s week=%s: %s', username, week, e)
-
-
 @app.route('/api/courses/<int:week>', methods=['GET'])
 def get_courses(week):
     # ── 确定访问身份与周次限制 ──────────────────────────────────────────────────
@@ -473,65 +456,58 @@ def get_courses(week):
     if share_mode and not (week_min <= week <= week_max):
         return jsonify({'error': f'分享码仅允许查看第 {week_min}~{week_max} 周'}), 403
 
-    # ── 读取缓存 ──────────────────────────────────────────────────────────────────
+    # ── 优先读缓存，无缓存时才实时抓取 ──────────────────────────────────────────
     force = request.args.get('force') == '1'
-    cache_row = None
-    actual_week_for_zero = week
 
-    with _db() as conn:
-        c = conn.cursor()
-        if week == 0:
-            # 先从最近一次缓存中读取 current_week，再精确取那一周的缓存
-            c.execute('SELECT data FROM courses WHERE username=? '
-                      'ORDER BY cached_at DESC LIMIT 1', (username,))
-            row = c.fetchone()
-            if row:
-                cur_w = json.loads(row[0]).get('metadata', {}).get('current_week')
-                if cur_w:
-                    actual_week_for_zero = cur_w
-                    c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
-                              (username, cur_w))
+    if not force:
+        with _db() as conn:
+            c = conn.cursor()
+            if week == 0:
+                # 先从最近一次缓存中读取 current_week，再精确取那一周的缓存
+                # 避免返回邻近周数据导致前端周次显示与课表内容不一致
+                c.execute('SELECT data FROM courses WHERE username=? '
+                          'ORDER BY cached_at DESC LIMIT 1', (username,))
+                row = c.fetchone()
+                if row:
+                    cur_w = json.loads(row[0]).get('metadata', {}).get('current_week')
+                    if cur_w:
+                        c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                                  (username, cur_w))
+                    else:
+                        c.execute('SELECT data, cached_at FROM courses WHERE username=? '
+                                  'ORDER BY cached_at DESC LIMIT 1', (username,))
+                    cache_row = c.fetchone()
                 else:
-                    c.execute('SELECT data, cached_at FROM courses WHERE username=? '
-                              'ORDER BY cached_at DESC LIMIT 1', (username,))
+                    cache_row = None
+            else:
+                c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
+                          (username, week))
                 cache_row = c.fetchone()
-        else:
+        if cache_row:
+            # 缓存超过抓取间隔视为过期，走实时抓取（失败仍回退旧缓存）
+            stale = False
+            try:
+                age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
+                if age > get_setting('fetch_interval', 60) * 60:
+                    stale = True
+            except (ValueError, TypeError):
+                stale = True
+            if not stale:
+                return jsonify({
+                    **json.loads(cache_row[0]),
+                    'from_cache': True,
+                    'cache_time': cache_row[1],
+                })
+
+    # 无缓存、缓存过期或强制刷新 → 实时抓取
+    cache_row = None
+    if week != 0:
+        with _db() as conn:
+            c = conn.cursor()
             c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
                       (username, week))
             cache_row = c.fetchone()
 
-    # ── 策略：有缓存就先返回，同时后台异步刷新 ──────────────────────────────────
-    if cache_row and not force:
-        # 检查缓存是否过期
-        should_refresh = False
-        try:
-            age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
-            # 缓存超过抓取间隔的一半就触发后台刷新（fetch_interval单位是分钟，需转换成秒）
-            threshold = get_setting('fetch_interval', 60) * 60 / 2
-            if age > threshold:
-                should_refresh = True
-                logger.info('缓存过期触发刷新 user=%s week=%s age=%.1fs threshold=%.1fs',
-                           username, actual_week_for_zero if week == 0 else week, age, threshold)
-        except (ValueError, TypeError):
-            should_refresh = True
-
-        # 触发后台异步刷新（不阻塞用户请求）
-        if should_refresh and not share_mode:
-            threading.Thread(
-                target=_async_refresh_course,
-                args=(username, actual_week_for_zero if week == 0 else week),
-                daemon=True
-            ).start()
-
-        # 立即返回缓存数据
-        return jsonify({
-            **json.loads(cache_row[0]),
-            'from_cache': True,
-            'cache_time': cache_row[1],
-            'refreshing': should_refresh,
-        })
-
-    # ── 无缓存或强制刷新：同步获取 ──────────────────────────────────────────────
     try:
         course_data = fetch_from_jw(username, week)
         actual_week = course_data['metadata']['current_week'] if week == 0 else week
@@ -547,7 +523,6 @@ def get_courses(week):
 
     except Exception as e:
         logger.error('获取课表失败 user=%s week=%s: %s', username, week, e)
-        # 即使是旧缓存也返回，避免完全无法使用
         if cache_row:
             return jsonify({
                 **json.loads(cache_row[0]),
