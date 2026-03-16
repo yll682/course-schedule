@@ -18,9 +18,6 @@ import jw_client
 _token_refresh_locks = {}  # username -> Lock
 _token_locks_lock = threading.Lock()
 
-# 记录正在进行的刷新任务，避免重复启动
-_active_refresh_tasks = {}  # (username, week) -> timestamp
-_refresh_tasks_lock = threading.Lock()
 
 def _get_user_lock(username: str) -> threading.Lock:
     """获取用户专属的 token 刷新锁"""
@@ -29,30 +26,48 @@ def _get_user_lock(username: str) -> threading.Lock:
             _token_refresh_locks[username] = threading.Lock()
         return _token_refresh_locks[username]
 
+
 def _is_refreshing(username: str, week: int) -> bool:
-    """检查是否已有刷新任务在进行"""
-    with _refresh_tasks_lock:
-        key = (username, week)
-        if key in _active_refresh_tasks:
+    """检查是否已有刷新任务在进行（从数据库读取）"""
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT started_at FROM refresh_tasks WHERE username=? AND week=?',
+                  (username, week))
+        row = c.fetchone()
+        if row:
             # 如果任务超过30秒还没完成，认为已失败，允许重新启动
-            age = time_module.time() - _active_refresh_tasks[key]
-            if age < 30:
-                return True
-            else:
-                del _active_refresh_tasks[key]
+            try:
+                started = datetime.fromisoformat(row[0])
+                age = (datetime.now() - started).total_seconds()
+                if age < 30:
+                    return True
+                else:
+                    # 超时，删除任务记录
+                    c.execute('DELETE FROM refresh_tasks WHERE username=? AND week=?',
+                              (username, week))
+                    conn.commit()
+            except (ValueError, TypeError):
+                # 时间格式错误，删除无效记录
+                c.execute('DELETE FROM refresh_tasks WHERE username=? AND week=?',
+                          (username, week))
+                conn.commit()
         return False
 
+
 def _mark_refreshing(username: str, week: int):
-    """标记刷新任务开始"""
-    with _refresh_tasks_lock:
-        _active_refresh_tasks[(username, week)] = time_module.time()
+    """标记刷新任务开始（写入数据库）"""
+    with _db() as conn:
+        conn.execute('INSERT OR REPLACE INTO refresh_tasks VALUES (?, ?, ?)',
+                     (username, week, datetime.now().isoformat()))
+        conn.commit()
+
 
 def _unmark_refreshing(username: str, week: int):
-    """标记刷新任务完成"""
-    with _refresh_tasks_lock:
-        key = (username, week)
-        if key in _active_refresh_tasks:
-            del _active_refresh_tasks[key]
+    """标记刷新任务完成（从数据库删除）"""
+    with _db() as conn:
+        conn.execute('DELETE FROM refresh_tasks WHERE username=? AND week=?',
+                     (username, week))
+        conn.commit()
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -156,6 +171,9 @@ def init_db():
                       week_from INTEGER NOT NULL, week_to INTEGER NOT NULL,
                       expires_at TEXT NOT NULL, created_at TEXT NOT NULL,
                       revoked INTEGER NOT NULL DEFAULT 0)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS refresh_tasks
+                     (username TEXT, week INTEGER, started_at TEXT,
+                      PRIMARY KEY (username, week))''')
         c.execute('CREATE INDEX IF NOT EXISTS idx_share_owner ON share_tokens(owner)')
         for col_def in [
             'jw_token TEXT', 'token_time TEXT', 'jw_name TEXT',
