@@ -562,43 +562,61 @@
                     if (occupied[key]) return;
                     const dayData = data.完整课表.find(d => d.weekday === day);
 
-                    // 查找所有在当前slot开始或覆盖当前slot的课程
-                    const overlappingCourses = dayData ? dayData.courses.filter(c => {
-                        const start = c.time_slots.start_slot;
-                        const end = start + c.time_slots.duration - 1;
-                        return start <= slot && slot <= end;
-                    }) : [];
-
-                    // 找出真正从当前slot开始的课程
-                    const coursesStartingHere = overlappingCourses.filter(c => c.time_slots.start_slot === slot);
+                    // 找出从当前slot开始的所有课程
+                    const coursesStartingHere = dayData ? dayData.courses.filter(c =>
+                        c.time_slots.start_slot === slot
+                    ) : [];
 
                     if (coursesStartingHere.length > 0) {
-                        // 有课程从这个slot开始
-                        const course = coursesStartingHere[0]; // 先渲染第一门课
+                        // 找出所有与这些课程时间重叠的课程
+                        const allConflictingCourses = [];
+                        coursesStartingHere.forEach(course => {
+                            const start = course.time_slots.start_slot;
+                            const end = start + course.time_slots.duration - 1;
+
+                            // 查找所有与当前课程时间重叠的其他课程
+                            const conflicts = dayData.courses.filter(c => {
+                                if (c === course) return false;
+                                const cStart = c.time_slots.start_slot;
+                                const cEnd = cStart + c.time_slots.duration - 1;
+                                return !(cEnd < start || cStart > end);
+                            });
+
+                            if (conflicts.length > 0) {
+                                allConflictingCourses.push(course, ...conflicts);
+                            }
+                        });
+
+                        // 去重
+                        const uniqueCourses = allConflictingCourses.length > 0
+                            ? Array.from(new Set(allConflictingCourses))
+                            : coursesStartingHere;
+
+                        // 渲染第一门课程
+                        const course = coursesStartingHere[0];
                         const duration = course.time_slots.duration;
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot+i}`] = true;
-                        window._courseMap[key] = course;
+
                         const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                         const endGr = slotRow(slot + duration - 1) + 1;
 
-                        // 如果有多门课程重叠，显示警告标记
-                        const conflictMark = coursesStartingHere.length > 1 ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
+                        // 如果有冲突课程，显示警告标记
+                        const hasConflict = uniqueCourses.length > 1;
+                        const conflictMark = hasConflict ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
 
                         table.innerHTML += `
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
-                                <div class="course" data-key="${esc(key)}" style="${coursesStartingHere.length > 1 ? 'border-left-color:#ff4d4f;' : ''}">
+                                <div class="course" data-key="${esc(key)}" style="${hasConflict ? 'border-left-color:#ff4d4f;' : ''}">
                                     <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
                                     <div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
-                                    ${coursesStartingHere.length > 1 ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${coursesStartingHere.length - 1}门冲突</div>` : ''}
+                                    ${hasConflict ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${uniqueCourses.length - 1}门冲突</div>` : ''}
                                 </div>
                             </div>`;
 
-                        // 将所有重叠的课程都存储起来，供点击查看
-                        if (coursesStartingHere.length > 1) {
-                            window._courseMap[key] = coursesStartingHere; // 存储数组
-                        }
+                        // 存储所有冲突课程供点击查看
+                        window._courseMap[key] = hasConflict ? uniqueCourses : course;
                     } else {
                         table.innerHTML += `<div class="cell" style="grid-row:${gr};grid-column:${gc}"></div>`;
                     }
