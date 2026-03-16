@@ -605,8 +605,12 @@
 
             // 如果是数组，说明有多门课程冲突
             if (Array.isArray(courseData)) {
+                // 清理之前可能添加的冲突列表（避免累积）
+                const existingList = document.getElementById('conflict-list');
+                if (existingList) existingList.remove();
+
                 // 显示所有冲突课程的列表
-                let html = '<div style="max-height:400px;overflow-y:auto">';
+                let html = '<div style="max-height:400px;overflow-y:auto" id="conflict-list">';
                 courseData.forEach((course, idx) => {
                     const t = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                     html += `
@@ -623,11 +627,11 @@
                 html += '</div>';
 
                 document.getElementById('modal-name').textContent = '⚠️ 课程时间冲突';
-                document.getElementById('modal').innerHTML = `
-                    <button class="modal-close" onclick="closeModal()">✕</button>
-                    <div class="modal-title">⚠️ 课程时间冲突（${courseData.length}门）</div>
-                    ${html}
-                `;
+                document.getElementById('modal-location').textContent = courseData.length + '门课程时间冲突';
+                document.getElementById('modal-time').textContent = '';
+                document.getElementById('modal-teacher').textContent = '';
+                document.getElementById('modal-weeks-row').style.display = 'none';
+                document.getElementById('modal').insertAdjacentHTML('beforeend', html);
                 document.getElementById('modal-overlay').classList.add('open');
             } else {
                 // 单门课程，正常显示
