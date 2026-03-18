@@ -1,5 +1,5 @@
-const CACHE = 'kechenbiao-v2';
-const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/icon.svg', '/manifest.json'];
+const CACHE = 'kechenbiao-v3';
+const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/style.css', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
     e.waitUntil(
