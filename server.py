@@ -221,8 +221,9 @@ def fetch_from_jw(username: str, week: int) -> dict:
 
 
 # ── 后台定时抓取 ──────────────────────────────────────────────────────────────
-# 用户失败计数，连续失败 3 次后跳过
+# 用户失败计数，连续失败 3 次后降频重试（每 10 轮重试一次）
 _user_fail_counts = defaultdict(int)
+_user_skip_counts = defaultdict(int)  # 当前已跳过轮数
 
 def background_fetch():
     while True:
@@ -233,10 +234,15 @@ def background_fetch():
                 users = [row[0] for row in c.fetchall()]
 
             for username in users:
-                # 连续失败 3 次后跳过该用户
+                # 连续失败 3 次后降频：每 10 轮才重试一次
                 if _user_fail_counts[username] >= 3:
-                    logger.info('跳过连续失败用户 user=%s', username)
-                    continue
+                    _user_skip_counts[username] += 1
+                    if _user_skip_counts[username] < 10:
+                        logger.info('降频跳过用户 user=%s skip=%d/10',
+                                    username, _user_skip_counts[username])
+                        continue
+                    else:
+                        _user_skip_counts[username] = 0  # 重置，允许重试
 
                 try:
                     data = fetch_from_jw(username, 0)
@@ -263,8 +269,9 @@ def background_fetch():
                             except Exception as e:
                                 logger.info('后台抓取邻近周失败 user=%s week=%d: %s', username, w, e)
 
-                    # 成功后重置失败计数
+                    # 成功后重置失败计数和跳过计数
                     _user_fail_counts[username] = 0
+                    _user_skip_counts[username] = 0
 
                 except Exception as e:
                     _user_fail_counts[username] += 1
