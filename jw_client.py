@@ -15,8 +15,15 @@ from Crypto.Util.Padding import pad, unpad
 BASE_URL = "http://59.57.242.167:81/njwhd"
 AES_KEY  = b"qzkj1kjghd=876&*"
 
-# 本地存储加密使用独立密钥（从环境变量读取，未设置则使用默认值）
-STORAGE_KEY = os.environ.get('STORAGE_AES_KEY', 'local_storage_key_32_bytes!!').encode()[:16]
+# 本地存储加密使用独立密钥（必须通过环境变量设置，未设置则启动失败）
+_storage_key_raw = os.environ.get('STORAGE_AES_KEY')
+if not _storage_key_raw:
+    raise RuntimeError(
+        "环境变量 STORAGE_AES_KEY 未设置。"
+        "请生成一个随机密钥并设置该变量，例如：\n"
+        "  python -c \"import secrets; print(secrets.token_hex(16))\""
+    )
+STORAGE_KEY = _storage_key_raw.encode()[:16]
 
 WEEKDAY_MAP = {
     "1": "周一", "2": "周二", "3": "周三", "4": "周四",
@@ -34,15 +41,24 @@ def encrypt_password(password: str) -> str:
     return base64.b64encode(aes_b64.encode()).decode()   # window.btoa()
 
 
-# ── 本地存储加密（DB 中不明文存密码） ─────────────────────────────────────────
+# ── 本地存储加密（DB 中不明文存密码，AES-GCM） ────────────────────────────────
 
 def encrypt_for_storage(password: str) -> str:
-    ciphertext = AES.new(STORAGE_KEY, AES.MODE_ECB).encrypt(
-        pad(password.encode("utf-8"), 16))
-    return base64.b64encode(ciphertext).decode()
+    """AES-GCM 加密，格式：'gcm:' + base64(iv + ciphertext + tag)"""
+    iv = os.urandom(16)
+    cipher = AES.new(STORAGE_KEY, AES.MODE_GCM, nonce=iv)
+    ciphertext, tag = cipher.encrypt_and_digest(password.encode("utf-8"))
+    return "gcm:" + base64.b64encode(iv + ciphertext + tag).decode()
 
 
 def decrypt_from_storage(enc: str) -> str:
+    """自动兼容旧 ECB 格式和新 GCM 格式"""
+    if enc.startswith("gcm:"):
+        raw = base64.b64decode(enc[4:])
+        iv, ciphertext, tag = raw[:16], raw[16:-16], raw[-16:]
+        cipher = AES.new(STORAGE_KEY, AES.MODE_GCM, nonce=iv)
+        return cipher.decrypt_and_verify(ciphertext, tag).decode("utf-8")
+    # 兼容旧 ECB 格式
     ciphertext = base64.b64decode(enc)
     return unpad(AES.new(STORAGE_KEY, AES.MODE_ECB).decrypt(ciphertext), 16).decode("utf-8")
 

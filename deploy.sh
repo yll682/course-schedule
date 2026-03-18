@@ -92,7 +92,6 @@ do_install() {
     setup_venv
     if [[ "$is_update" == false ]]; then
         setup_env
-        patch_admin
     fi
     setup_systemd
     print_done
@@ -183,23 +182,21 @@ setup_venv() {
 setup_env() {
     local env_file="$APP_DIR/.env"
     info "生成 .env..."
-    local secret_key
+    local secret_key storage_key
     secret_key=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+    storage_key=$(python3 -c "import secrets; print(secrets.token_hex(16))")
     cat > "$env_file" <<EOF
 SECRET_KEY=${secret_key}
+STORAGE_AES_KEY=${storage_key}
+ADMIN_USERS=${ADMIN_ID}
 PORT=${PORT}
 FLASK_DEBUG=false
 DB_FILE=${APP_DIR}/data/courses.db
 EOF
     chmod 600 "$env_file"
-    ok ".env 已生成（SECRET_KEY 随机生成）"
+    ok ".env 已生成（SECRET_KEY 和 STORAGE_AES_KEY 随机生成）"
 }
 
-patch_admin() {
-    [[ -z "$ADMIN_ID" ]] && return
-    sed -i "s/ADMIN_USERS = \[.*\]/ADMIN_USERS = ['${ADMIN_ID}']/" "$APP_DIR/server.py"
-    ok "管理员学号已设为 $ADMIN_ID"
-}
 
 setup_systemd() {
     # ── 数据目录迁移（兼容旧版本）──────────────────────────────

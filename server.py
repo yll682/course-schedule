@@ -51,13 +51,14 @@ app.secret_key = _secret
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('FLASK_DEBUG', 'false').lower() != 'true',
     SESSION_COOKIE_PERMANENT=True,
-    PERMANENT_SESSION_LIFETIME=timedelta(days=365),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 限制请求大小为 16MB
 )
 CORS(app, supports_credentials=True)
 
-ADMIN_USERS = ['2405309121']
+ADMIN_USERS = [u.strip() for u in os.environ.get('ADMIN_USERS', '2405309121').split(',') if u.strip()]
 DB_FILE = os.environ.get('DB_FILE', 'courses.db')
 
 # ── 安全响应头 ────────────────────────────────────────────────────────────────

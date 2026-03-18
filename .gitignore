@@ -11,6 +11,8 @@ __pycache__/
 captured_*.json
 app.js
 sniff_login.py
+view_week2.py
+.secret_key
 
 # 本地环境变量（含密钥，不入库）
 .env
