@@ -92,9 +92,8 @@ do_install() {
     setup_venv
     if [[ "$is_update" == false ]]; then
         setup_env
-    else
-        patch_env
     fi
+    patch_env
     setup_systemd
     print_done
 }
