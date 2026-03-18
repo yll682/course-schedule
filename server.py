@@ -508,13 +508,17 @@ def get_courses(week):
                 })
 
     # 无缓存、缓存过期或强制刷新 → 实时抓取
+    # 保存旧缓存用于失败回退（week=0 也需要）
     cache_row = None
-    if week != 0:
-        with _db() as conn:
-            c = conn.cursor()
+    with _db() as conn:
+        c = conn.cursor()
+        if week == 0:
+            c.execute('SELECT data, cached_at FROM courses WHERE username=? '
+                      'ORDER BY cached_at DESC LIMIT 1', (username,))
+        else:
             c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
                       (username, week))
-            cache_row = c.fetchone()
+        cache_row = c.fetchone()
 
     try:
         course_data = fetch_from_jw(username, week)
