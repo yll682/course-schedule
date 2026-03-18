@@ -220,6 +220,22 @@ def fetch_from_jw(username: str, week: int) -> dict:
     return jw_client.transform_timetable(raw, user_info, result_week)
 
 
+def _background_refresh_user(username: str, week: int):
+    """缓存过期时后台异步刷新，不阻塞用户请求"""
+    try:
+        data = fetch_from_jw(username, week)
+        actual_week = data['metadata']['current_week'] if week == 0 else week
+        with _db() as conn:
+            conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                         (username, actual_week,
+                          json.dumps(data, ensure_ascii=False),
+                          datetime.now().isoformat()))
+            conn.commit()
+        logger.info('后台刷新完成 user=%s week=%s', username, week)
+    except Exception as e:
+        logger.info('后台刷新失败 user=%s week=%s: %s', username, week, e)
+
+
 # ── 后台定时抓取 ──────────────────────────────────────────────────────────────
 # 用户失败计数，连续失败 3 次后降频重试（每 10 轮重试一次）
 _user_fail_counts = defaultdict(int)
@@ -492,7 +508,6 @@ def get_courses(week):
                           (username, week))
                 cache_row = c.fetchone()
         if cache_row:
-            # 缓存超过抓取间隔视为过期，走实时抓取（失败仍回退旧缓存）
             stale = False
             try:
                 age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
@@ -500,26 +515,22 @@ def get_courses(week):
                     stale = True
             except (ValueError, TypeError):
                 stale = True
-            if not stale:
-                return jsonify({
-                    **json.loads(cache_row[0]),
-                    'from_cache': True,
-                    'cache_time': cache_row[1],
-                })
 
-    # 无缓存、缓存过期或强制刷新 → 实时抓取
-    # 保存旧缓存用于失败回退（week=0 也需要）
-    cache_row = None
-    with _db() as conn:
-        c = conn.cursor()
-        if week == 0:
-            c.execute('SELECT data, cached_at FROM courses WHERE username=? '
-                      'ORDER BY cached_at DESC LIMIT 1', (username,))
-        else:
-            c.execute('SELECT data, cached_at FROM courses WHERE username=? AND week=?',
-                      (username, week))
-        cache_row = c.fetchone()
+            # 有缓存就立即返回，过期则后台异步刷新
+            if stale:
+                threading.Thread(
+                    target=_background_refresh_user,
+                    args=(username, week),
+                    daemon=True
+                ).start()
+            return jsonify({
+                **json.loads(cache_row[0]),
+                'from_cache': True,
+                'cache_time': cache_row[1],
+                'refreshing': stale,
+            })
 
+    # 完全无缓存 → 实时抓取
     try:
         course_data = fetch_from_jw(username, week)
         actual_week = course_data['metadata']['current_week'] if week == 0 else week
@@ -535,13 +546,6 @@ def get_courses(week):
 
     except Exception as e:
         logger.error('获取课表失败 user=%s week=%s: %s', username, week, e)
-        if cache_row:
-            return jsonify({
-                **json.loads(cache_row[0]),
-                'from_cache': True,
-                'fetch_failed': True,
-                'cache_time': cache_row[1],
-            })
         return jsonify({'error': '无法获取课表，请稍后重试'}), 500
 
 
