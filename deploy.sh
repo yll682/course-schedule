@@ -92,6 +92,8 @@ do_install() {
     setup_venv
     if [[ "$is_update" == false ]]; then
         setup_env
+    else
+        patch_env
     fi
     setup_systemd
     print_done
@@ -177,6 +179,16 @@ setup_venv() {
     "$APP_DIR/.venv/bin/pip" install --quiet --upgrade pip
     "$APP_DIR/.venv/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"
     ok "Python 依赖安装完成"
+}
+
+patch_env() {
+    local env_file="$APP_DIR/.env"
+    if ! grep -q "^STORAGE_AES_KEY=" "$env_file" 2>/dev/null; then
+        local storage_key
+        storage_key=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+        echo "STORAGE_AES_KEY=${storage_key}" >> "$env_file"
+        ok "已自动生成 STORAGE_AES_KEY 并写入 .env"
+    fi
 }
 
 setup_env() {
