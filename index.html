@@ -527,10 +527,7 @@
 
             if (headerButtonMode === 'capture') {
                 setHeaderButtonCaptureMode(btn);
-                if (dateEl) {
-                    dateEl.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
-                    dateEl.style.display = '';
-                }
+                if (dateEl) dateEl.style.display = 'none';
                 return;
             }
 
