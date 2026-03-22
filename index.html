@@ -316,7 +316,7 @@
                 const canvas = await html2canvas(container, {
                     backgroundColor: getComputedStyle(document.body).backgroundColor,
                     useCORS: true,
-                    scale: Math.max(window.devicePixelRatio || 1, 2),
+                    scale: Math.min(window.devicePixelRatio || 1, 2),
                 });
                 const link = document.createElement('a');
                 link.href = canvas.toDataURL('image/png');
