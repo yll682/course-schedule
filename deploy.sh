@@ -156,12 +156,13 @@ setup_code() {
 
     if [[ -d "$APP_DIR/.git" ]]; then
         info "拉取最新代码..."
-        if ! git -C "$APP_DIR" pull --ff-only 2>/dev/null; then
+        if ! git -C "$APP_DIR" fetch origin 2>/dev/null; then
             info "直连失败，尝试 EdgeOne 加速..."
             git -C "$APP_DIR" remote set-url origin "$REPO_URL_CN"
-            git -C "$APP_DIR" pull --ff-only
+            git -C "$APP_DIR" fetch origin
             git -C "$APP_DIR" remote set-url origin "$REPO_URL"
         fi
+        git -C "$APP_DIR" reset --hard origin/master
     else
         info "克隆仓库..."
         if ! git clone "$REPO_URL" "$APP_DIR" 2>/dev/null; then
