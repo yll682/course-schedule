@@ -90,6 +90,25 @@
             background: var(--c-input); color: var(--c-text);
         }
         .week-chip:hover { background: #e6f4ff; border-color: #1890ff; color: #1890ff; }
+        .advanced-toggle {
+            width: 100%; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 10px 12px; margin-top: 16px;
+            border: 1px solid var(--c-border-soft); border-radius: 8px;
+            background: var(--c-subtle); color: var(--c-text);
+            cursor: pointer; font-size: 0.88rem; text-align: left;
+        }
+        .advanced-toggle:hover { background: var(--c-hover); }
+        .advanced-panel {
+            display: none; margin-top: 12px; padding: 14px;
+            border: 1px solid var(--c-border-soft); border-radius: 8px;
+            background: var(--c-subtle);
+        }
+        .advanced-panel.open { display: block; }
+        .advanced-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .advanced-summary { font-size: 0.78rem; color: var(--c-muted); }
     </style>
 </head>
 <body>
@@ -115,6 +134,34 @@
             </div>
             <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
             <div id="cache-clear-status" style="font-size:0.82rem;color:#52c41a;margin-top:8px;display:none"></div>
+
+            <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
+                <span>
+                    <strong>高级选项</strong>
+                    <span class="advanced-summary">配置首页左上角按钮和截图尺寸</span>
+                </span>
+                <span id="advanced-toggle-icon">▾</span>
+            </button>
+            <div class="advanced-panel" id="advanced-panel">
+                <div class="advanced-grid">
+                    <div class="field" style="margin:0">
+                        <label for="home-button-mode">左上角按钮</label>
+                        <select id="home-button-mode" onchange="saveAdvancedOptions()">
+                            <option value="back_to_week">回本周</option>
+                            <option value="capture">截图</option>
+                        </select>
+                    </div>
+                    <div class="field" style="margin:0">
+                        <label for="capture-size-preset">截图尺寸</label>
+                        <select id="capture-size-preset" onchange="saveAdvancedOptions()">
+                            <option value="device">当前设备</option>
+                            <option value="a4">A4 (595 x 842)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="hint">截图会按所选尺寸临时渲染当前课表页面并下载，设置仅保存在当前浏览器。</div>
+                <div class="save-status" id="advanced-save-status" style="margin-top:10px">✓ 已保存</div>
+            </div>
         </div>
 
         <!-- ── 分享码（所有用户）── -->
@@ -207,11 +254,69 @@
         let isAdmin = false;
         let maxWeekForExport = 20;
         let adminUsersList = [];
+        const BUTTON_MODE_KEY = 'schedule_button_mode';
+        const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
+        const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
 
         function esc(s) {
             return String(s ?? '')
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function readLocalPreference(key, fallback) {
+            try {
+                const value = localStorage.getItem(key);
+                return value === null ? fallback : value;
+            } catch (_) {
+                return fallback;
+            }
+        }
+
+        function writeLocalPreference(key, value) {
+            try {
+                localStorage.setItem(key, value);
+            } catch (_) {}
+        }
+
+        function showAdvancedSaveStatus() {
+            const el = document.getElementById('advanced-save-status');
+            if (!el) return;
+            el.classList.add('show');
+            clearTimeout(showAdvancedSaveStatus._timer);
+            showAdvancedSaveStatus._timer = setTimeout(() => el.classList.remove('show'), 2500);
+        }
+
+        function syncAdvancedPanel(open) {
+            const panel = document.getElementById('advanced-panel');
+            const toggle = document.getElementById('advanced-toggle');
+            const icon = document.getElementById('advanced-toggle-icon');
+            if (!panel || !toggle || !icon) return;
+            panel.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            icon.textContent = open ? '▴' : '▾';
+            writeLocalPreference(ADVANCED_PANEL_KEY, open ? '1' : '0');
+        }
+
+        function toggleAdvancedOptions() {
+            const panel = document.getElementById('advanced-panel');
+            syncAdvancedPanel(!panel.classList.contains('open'));
+        }
+
+        function loadAdvancedOptions() {
+            const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
+            const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
+            document.getElementById('home-button-mode').value = mode;
+            document.getElementById('capture-size-preset').value = preset;
+            syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
+        }
+
+        function saveAdvancedOptions() {
+            const mode = document.getElementById('home-button-mode').value;
+            const preset = document.getElementById('capture-size-preset').value;
+            writeLocalPreference(BUTTON_MODE_KEY, mode);
+            writeLocalPreference(CAPTURE_PRESET_KEY, preset);
+            showAdvancedSaveStatus();
         }
 
         async function init() {
@@ -246,6 +351,7 @@
                 document.getElementById('slot34_special_pattern').value = data.slot34_special_pattern;
             }
 
+            loadAdvancedOptions();
             loadShares();
         }
 

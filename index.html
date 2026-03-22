@@ -28,6 +28,7 @@
             font-size: 1rem; line-height: 1; white-space: nowrap;
         }
         .icon-btn:hover { background: var(--c-hover); }
+        .icon-btn.capture-mode { min-width: 46px; }
         body { padding: 10px; }
         .container {
             max-width: 1400px; margin: 0 auto;
@@ -112,7 +113,7 @@
         <div class="page-header">
             <div class="header-side">
                 <span class="side-label" id="today-date"></span>
-                <button class="icon-btn" id="back-week-btn" onclick="goCurrentWeek()" title="回本周" style="display:none">↩</button>
+                <button class="icon-btn" id="back-week-btn" onclick="handleHeaderAction()" title="回本周" style="display:none">↩</button>
             </div>
             <h1>📚 课程表</h1>
             <div class="header-side right">
@@ -189,6 +190,14 @@
         let adminViewUser = null;
         let importWeeksMap = {};
         let slot34SpecialPattern = '';
+        const BUTTON_MODE_KEY = 'schedule_button_mode';
+        const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
+        let headerButtonMode = 'back_to_week';
+        let captureSizePreset = 'device';
+        const CAPTURE_PRESETS = {
+            device: { label: '当前设备' },
+            a4: { label: 'A4', width: 595, minHeight: 842 },
+        };
 
         // 标准节次时间
         const _SLOT_START = {1:'08:30',2:'09:20',3:'10:25',4:'11:15',5:'14:30',6:'15:25',7:'16:20',8:'17:15',9:'19:00',10:'19:55'};
@@ -205,6 +214,126 @@
             const s = starts[startSlot] ?? '';
             const e = ends[startSlot + duration - 1] ?? '';
             return s && e ? `${s}–${e}` : '';
+        }
+
+        function readLocalPreference(key, fallback) {
+            try {
+                const value = localStorage.getItem(key);
+                return value === null ? fallback : value;
+            } catch (_) {
+                return fallback;
+            }
+        }
+
+        function loadHeaderPreferences() {
+            const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
+            const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
+            headerButtonMode = mode === 'capture' ? 'capture' : 'back_to_week';
+            captureSizePreset = CAPTURE_PRESETS[preset] ? preset : 'device';
+        }
+
+        function getCapturePreset() {
+            return CAPTURE_PRESETS[captureSizePreset] || CAPTURE_PRESETS.device;
+        }
+
+        function getCaptureFileName() {
+            const weekText = currentWeek ? `第${currentWeek}周_` : '';
+            const date = new Date();
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `课表_${weekText}${y}-${m}-${d}.png`;
+        }
+
+        function setHeaderButtonCaptureMode(btn) {
+            const preset = getCapturePreset();
+            btn.classList.add('capture-mode');
+            btn.textContent = '📷';
+            btn.title = `截图（${preset.label}）`;
+            btn.setAttribute('aria-label', btn.title);
+            btn.style.display = '';
+        }
+
+        async function handleHeaderAction() {
+            if (headerButtonMode === 'capture') {
+                await captureCurrentView();
+                return;
+            }
+            goCurrentWeek();
+        }
+
+        async function waitForNextPaint() {
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        }
+
+        async function captureCurrentView() {
+            const btn = document.getElementById('back-week-btn');
+            const container = document.querySelector('.container');
+            const wrapper = document.querySelector('.timetable-wrapper');
+            const table = document.getElementById('timetable');
+            const overlay = document.getElementById('modal-overlay');
+            if (!btn || !container || !wrapper || !table) return;
+            if (typeof html2canvas !== 'function') {
+                alert('截图组件加载失败，请刷新后重试');
+                return;
+            }
+
+            const preset = getCapturePreset();
+            const original = {
+                btnDisabled: btn.disabled,
+                btnText: btn.textContent,
+                btnTitle: btn.title,
+                containerCssText: container.style.cssText,
+                wrapperCssText: wrapper.style.cssText,
+                tableCssText: table.style.cssText,
+                bodyCssText: document.body.style.cssText,
+                scrollX: window.scrollX,
+                scrollY: window.scrollY,
+            };
+            const overlayWasOpen = overlay.classList.contains('open');
+
+            try {
+                closeModal();
+                btn.disabled = true;
+                btn.textContent = '处理中';
+                btn.title = '正在生成截图';
+
+                if (preset.width) {
+                    container.style.maxWidth = `${preset.width}px`;
+                    container.style.width = `${preset.width}px`;
+                    container.style.margin = '0 auto';
+                    container.style.padding = '12px';
+                    container.style.minHeight = preset.minHeight ? `${preset.minHeight}px` : '';
+                    wrapper.style.overflowX = 'visible';
+                    table.style.minWidth = '0';
+                    document.body.style.padding = '0';
+                }
+
+                await waitForNextPaint();
+                const canvas = await html2canvas(container, {
+                    backgroundColor: getComputedStyle(document.body).backgroundColor,
+                    useCORS: true,
+                    scale: Math.max(window.devicePixelRatio || 1, 2),
+                });
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = getCaptureFileName();
+                link.click();
+            } catch (error) {
+                console.error('截图失败', error);
+                alert('截图失败，请稍后重试');
+            } finally {
+                container.style.cssText = original.containerCssText;
+                wrapper.style.cssText = original.wrapperCssText;
+                table.style.cssText = original.tableCssText;
+                document.body.style.cssText = original.bodyCssText;
+                btn.disabled = original.btnDisabled;
+                btn.textContent = original.btnText;
+                btn.title = original.btnTitle;
+                if (overlayWasOpen) overlay.classList.add('open');
+                window.scrollTo(original.scrollX, original.scrollY);
+                updateBackWeekBtn();
+            }
         }
 
         const _params = new URLSearchParams(window.location.search);
@@ -390,13 +519,28 @@
             const btn = document.getElementById('back-week-btn');
             const dateEl = document.getElementById('today-date');
             if (!btn) return;
+            const now = new Date();
             const notCurrent = realCurrentWeek && currentWeek !== realCurrentWeek;
+
+            btn.classList.remove('capture-mode');
+            btn.setAttribute('aria-label', '回本周');
+
+            if (headerButtonMode === 'capture') {
+                setHeaderButtonCaptureMode(btn);
+                if (dateEl) {
+                    dateEl.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
+                    dateEl.style.display = '';
+                }
+                return;
+            }
+
+            btn.textContent = '↩';
+            btn.title = '回本周';
             btn.style.display = notCurrent ? '' : 'none';
             if (dateEl) {
                 if (notCurrent) {
                     dateEl.style.display = 'none';
                 } else {
-                    const now = new Date();
                     dateEl.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
                     dateEl.style.display = '';
                 }
@@ -605,6 +749,8 @@
         });
 
         async function init() {
+            loadHeaderPreferences();
+            updateBackWeekBtn();
             await checkAuth();
             if (!importMode) {
                 loadCourses();
@@ -633,5 +779,6 @@
     <script>
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </body>
 </html>
