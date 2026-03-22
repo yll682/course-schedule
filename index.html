@@ -534,16 +534,17 @@
                 return;
             }
 
-            btn.textContent = '↩';
-            btn.title = '回本周';
-            btn.style.display = notCurrent ? '' : 'none';
-            if (dateEl) {
-                if (notCurrent) {
-                    dateEl.style.display = 'none';
-                } else {
-                    dateEl.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
-                    dateEl.style.display = '';
-                }
+            if (dateEl) dateEl.style.display = 'none';
+            if (notCurrent) {
+                btn.textContent = '↩';
+                btn.title = '回本周';
+                btn.style.cursor = '';
+                btn.style.display = '';
+            } else {
+                btn.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
+                btn.title = '';
+                btn.style.cursor = 'default';
+                btn.style.display = '';
             }
         }
 
