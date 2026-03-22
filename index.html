@@ -294,9 +294,12 @@
 
             try {
                 closeModal();
+                const now = new Date();
+                const dateLabel = `${now.getMonth() + 1}/${now.getDate()}`;
                 btn.disabled = true;
-                btn.textContent = '处理中';
+                btn.textContent = dateLabel;
                 btn.title = '正在生成截图';
+                btn.classList.remove('capture-mode');
 
                 if (preset.width) {
                     container.style.maxWidth = `${preset.width}px`;
