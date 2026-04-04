@@ -129,6 +129,11 @@ def init_db():
                       expires_at TEXT NOT NULL, created_at TEXT NOT NULL,
                       revoked INTEGER NOT NULL DEFAULT 0)''')
         c.execute('CREATE INDEX IF NOT EXISTS idx_share_owner ON share_tokens(owner)')
+        # ICS订阅令牌表
+        c.execute('''CREATE TABLE IF NOT EXISTS ics_tokens
+                     (token TEXT PRIMARY KEY, username TEXT NOT NULL,
+                      created_at TEXT NOT NULL, revoked INTEGER DEFAULT 0)''')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_ics_username ON ics_tokens(username)')
         for col_def in [
             'jw_token TEXT', 'token_time TEXT', 'jw_name TEXT',
             'jw_class TEXT', 'jw_kbjcmsid TEXT', 'password_enc TEXT',
@@ -577,6 +582,13 @@ def settings():
                 conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
                              ('slot34_special_pattern', pattern))
                 conn.commit()
+        # ics_enabled：管理员专属
+        if 'ics_enabled' in data and is_admin:
+            enabled = 'true' if data['ics_enabled'] else 'false'
+            with _db() as conn:
+                conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
+                             ('ics_enabled', enabled))
+                conn.commit()
         return jsonify({'success': True})
 
     with _db() as conn:
@@ -891,6 +903,395 @@ def admin_force_fetch():
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({'success': True, 'message': '已在后台开始抓取，请稍后刷新查看'})
+
+
+# ── ICS 日历订阅 ────────────────────────────────────────────────────────────────
+
+def _can_use_ics(username: str, is_admin: bool) -> bool:
+    """检查用户是否可以使用ICS订阅"""
+    if is_admin:
+        return True
+    return get_setting('ics_enabled', 'false').lower() == 'true'
+
+
+def _get_slot_time_range(start_slot: int, duration: int, location: str = '') -> tuple:
+    """根据节次和上课地点获取时间范围 (start_time, end_time)
+
+    地点参数用于支持部分教学楼第3-4节的特殊时间（由管理员配置）。
+    """
+    # 标准节次时间（与前端 getCourseTime 保持一致）
+    slot_starts = {
+        1: '08:30', 2: '09:20', 3: '10:25', 4: '11:15',
+        5: '14:30', 6: '15:25', 7: '16:20', 8: '17:15',
+        9: '19:00', 10: '19:55',
+    }
+    slot_ends = {
+        1: '09:15', 2: '10:05', 3: '11:10', 4: '12:00',
+        5: '15:15', 6: '16:10', 7: '17:05', 8: '18:00',
+        9: '19:45', 10: '20:40',
+    }
+    # 特殊教学楼第3-4节时间（翔安校区等）
+    slot_starts_sp = {3: '10:15', 4: '11:05'}
+    slot_ends_sp   = {3: '11:00', 4: '11:50'}
+
+    # 读取管理员配置的特殊教学楼模式
+    try:
+        pattern = get_setting('slot34_special_pattern', '')
+        special = bool(pattern) and any(p.strip() in location for p in pattern.split(',') if p.strip())
+    except Exception:
+        special = False
+
+    starts = {**slot_starts, **slot_starts_sp} if special else slot_starts
+    ends   = {**slot_ends,   **slot_ends_sp}   if special else slot_ends
+
+    if start_slot not in slot_starts:
+        return ('08:00', '09:00')
+    start_time = starts.get(start_slot, '08:00')
+    end_slot   = start_slot + duration - 1
+    end_time   = ends.get(end_slot, ends.get(start_slot, '09:00'))
+    return (start_time, end_time)
+
+
+def _parse_weeks(weeks_str: str) -> list:
+    """解析周次字符串，返回周次列表
+
+    支持格式：
+    - "1,3,5"       -> [1, 3, 5]
+    - "1-10"        -> [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    - "1,3,5,7,9"   -> [1, 3, 5, 7, 9]
+    - "1-5,7,9"     -> [1, 2, 3, 4, 5, 7, 9]
+    """
+    if not weeks_str:
+        return []
+    weeks = set()
+    for part in weeks_str.replace('，', ',').split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            try:
+                start, end = part.split('-', 1)
+                weeks.update(range(int(start), int(end) + 1))
+            except (ValueError, TypeError):
+                continue
+        else:
+            try:
+                weeks.add(int(part))
+            except ValueError:
+                continue
+    return sorted(weeks)
+
+
+def generate_ics(username: str) -> str:
+    """生成ICS格式的日历数据
+
+    每节课单独生成一个VEVENT，不使用RRULE重复规则。
+    直接使用数据库中已有的日期信息，不进行估算。
+    """
+    with _db() as conn:
+        c = conn.cursor()
+        # 按周次排序读取所有缓存数据
+        c.execute('SELECT week, data FROM courses WHERE username=? ORDER BY week', (username,))
+        rows = c.fetchall()
+
+    if not rows:
+        return _generate_empty_ics()
+
+    # 收集所有课程实例（每节课一个事件）
+    events = []
+
+    for week, data_json in rows:
+        try:
+            data = json.loads(data_json)
+
+            for day_data in data.get('完整课表', []):
+                date_str = day_data.get('date', '')
+                if not date_str:
+                    continue
+
+                # 验证日期格式
+                try:
+                    datetime.strptime(date_str[:10], '%Y-%m-%d')
+                except ValueError:
+                    logger.warning('日期格式无效，跳过: %s', date_str)
+                    continue
+
+                for course in day_data.get('courses', []):
+                    # 获取上课地点（用于特殊节次时间判断）
+                    location = course.get('location', '')
+                    # 根据节次和地点计算时间
+                    start_slot = course.get('time_slots', {}).get('start_slot', 1)
+                    duration = course.get('time_slots', {}).get('duration', 1)
+                    start_time_str, end_time_str = _get_slot_time_range(start_slot, duration, location)
+
+                    # 构建完整的DTSTART和DTEND
+                    dtstart = f'{date_str[:10].replace("-", "")}T{start_time_str.replace(":", "")}00'
+                    dtend = f'{date_str[:10].replace("-", "")}T{end_time_str.replace(":", "")}00'
+
+                    # 获取周次信息
+                    weeks_str = course.get('weeks', '')
+                    week_display = f'第{week}周' if weeks_str else f'第{week}周'
+                    if weeks_str:
+                        week_display = f'第{week}周({weeks_str})'
+
+                    # 构建描述信息
+                    teacher = course.get('teacher', '')
+                    description_parts = []
+                    if teacher:
+                        description_parts.append(f'教师: {teacher}')
+                    if weeks_str:
+                        description_parts.append(f'周次: {weeks_str}')
+                    if location:
+                        description_parts.append(f'地点: {location}')
+                    description = ' | '.join(description_parts) if description_parts else ''
+
+                    # 唯一标识：课程名_日期_节次
+                    uid = f'{username}-{date_str}-{start_slot}@{course.get("course_name", "course")}'
+
+                    events.append({
+                        'uid': uid,
+                        'summary': course.get('course_name', '未知课程'),
+                        'description': description,
+                        'location': location,
+                        'dtstart': dtstart,
+                        'dtend': dtend,
+                        'week_display': week_display,
+                    })
+
+        except json.JSONDecodeError as e:
+            logger.warning('JSON解析失败 week=%s: %s', week, e)
+            continue
+        except Exception as e:
+            logger.warning('处理课表数据异常 week=%s: %s', week, e)
+            continue
+
+    # 生成ICS文件
+    if not events:
+        return _generate_empty_ics()
+
+    # 按日期和时间排序
+    events.sort(key=lambda x: (x['dtstart'], x['uid']))
+
+    ics_lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Course Schedule//CN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:课程表',
+        'X-WR-TIMEZONE:Asia/Shanghai',
+    ]
+
+    for event in events:
+        ics_lines.extend([
+            'BEGIN:VEVENT',
+            f'UID:{event["uid"]}',
+            f'SUMMARY:{event["summary"]}',
+            f'DTSTART;TZID=Asia/Shanghai:{event["dtstart"]}',
+            f'DTEND;TZID=Asia/Shanghai:{event["dtend"]}',
+        ])
+        if event['description']:
+            ics_lines.append(f'DESCRIPTION:{event["description"]}')
+        if event['location']:
+            ics_lines.append(f'LOCATION:{event["location"]}')
+        # 添加创建时间（ICS规范推荐）
+        ics_lines.append(f'DTSTAMP:{datetime.now().strftime("%Y%m%dT%H%M%S")}')
+        ics_lines.append('END:VEVENT')
+
+    ics_lines.append('END:VCALENDAR')
+
+    return '\r\n'.join(ics_lines)
+
+
+def _generate_empty_ics() -> str:
+    """生成空的ICS文件"""
+    return '\r\n'.join([
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Course Schedule//CN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:课程表',
+        'X-WR-TIMEZONE:Asia/Shanghai',
+        'END:VCALENDAR',
+    ])
+
+
+@app.route('/api/ics/create', methods=['POST'])
+def ics_create():
+    """创建ICS订阅"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    username = session['username']
+    is_admin = session.get('is_admin', False)
+
+    if not _can_use_ics(username, is_admin):
+        return jsonify({'error': '管理员未开放日历订阅功能'}), 403
+
+    # 检查是否已有有效订阅
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT token FROM ics_tokens WHERE username=? AND revoked=0', (username,))
+        row = c.fetchone()
+        if row:
+            return jsonify({'success': True, 'token': row[0], 'url': f'/calendar/{row[0]}.ics'})
+
+    # 全量同步所有周的课表（后台执行，不阻塞返回）
+    threading.Thread(
+        target=_sync_all_weeks_for_ics,
+        args=(username,),
+        daemon=True
+    ).start()
+
+    # 生成新token
+    for attempt in range(5):
+        token = secrets.token_hex(8).upper()
+        try:
+            with _db() as conn:
+                conn.execute(
+                    'INSERT INTO ics_tokens (token, username, created_at, revoked) VALUES (?, ?, ?, 0)',
+                    (token, username, datetime.now().isoformat())
+                )
+                conn.commit()
+            return jsonify({'success': True, 'token': token, 'url': f'/calendar/{token}.ics', 'syncing': True, 'message': '正在后台同步课表数据'})
+        except sqlite3.IntegrityError:
+            if attempt == 4:
+                logger.error('ICS token生成失败：5次尝试均冲突 user=%s', username)
+                return jsonify({'error': '生成订阅失败，请重试'}), 500
+            continue
+
+
+def _sync_all_weeks_for_ics(username: str):
+    """全量同步用户所有周的课表数据，用于ICS日历生成"""
+    try:
+        # 获取已缓存的周次列表
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('SELECT week, data FROM courses WHERE username=? ORDER BY week', (username,))
+            cached = {row[0]: json.loads(row[1]) for row in c.fetchall()}
+
+        if not cached:
+            # 没有任何缓存，先抓取当前周获取max_week
+            try:
+                data = fetch_from_jw(username, 0)
+                max_week = data['metadata'].get('max_week', 20)
+                current_week = data['metadata'].get('current_week', 1)
+                with _db() as conn:
+                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                 (username, current_week,
+                                  json.dumps(data, ensure_ascii=False),
+                                  datetime.now().isoformat()))
+                    conn.commit()
+                cached[current_week] = data
+            except Exception as e:
+                logger.error('ICS全量同步失败，无法获取初始数据 user=%s: %s', username, e)
+                return
+
+        # 从缓存数据中获取max_week
+        max_week = max(
+            (d.get('metadata', {}).get('max_week', 20) for d in cached.values()),
+            default=20
+        )
+
+        # 找出缺失的周次
+        cached_weeks = set(cached.keys())
+        missing_weeks = set(range(1, max_week + 1)) - cached_weeks
+
+        if not missing_weeks:
+            logger.info('ICS全量同步完成，数据已完整 user=%s weeks=%s', username, sorted(cached_weeks))
+            return
+
+        # 逐周抓取缺失的数据
+        for week in sorted(missing_weeks):
+            try:
+                data = fetch_from_jw(username, week)
+                with _db() as conn:
+                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+                                 (username, week,
+                                  json.dumps(data, ensure_ascii=False),
+                                  datetime.now().isoformat()))
+                    conn.commit()
+                logger.info('ICS全量同步已抓取 user=%s week=%d', username, week)
+            except Exception as e:
+                logger.warning('ICS全量同步抓取失败 user=%s week=%d: %s', username, week, e)
+                # 继续抓取其他周
+
+        logger.info('ICS全量同步完成 user=%s total=%d weeks', username, len(cached) + len(missing_weeks))
+
+    except Exception as e:
+        logger.error('ICS全量同步异常 user=%s: %s', username, e)
+
+
+@app.route('/api/ics/status', methods=['GET'])
+def ics_status():
+    """获取ICS订阅状态"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    username = session['username']
+    is_admin = session.get('is_admin', False)
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT token, created_at FROM ics_tokens WHERE username=? AND revoked=0', (username,))
+        row = c.fetchone()
+
+    return jsonify({
+        'enabled': _can_use_ics(username, is_admin),
+        'has_subscription': row is not None,
+        'token': row[0] if row else None,
+        'url': f'/calendar/{row[0]}.ics' if row else None,
+        'created_at': row[1] if row else None,
+    })
+
+
+@app.route('/api/ics/revoke', methods=['POST'])
+def ics_revoke():
+    """撤销ICS订阅"""
+    if 'username' not in session:
+        return jsonify({'error': '未登录'}), 401
+
+    username = session['username']
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT token FROM ics_tokens WHERE username=? AND revoked=0', (username,))
+        row = c.fetchone()
+        if not row:
+            return jsonify({'error': '没有有效的订阅'}), 404
+
+        c.execute('UPDATE ics_tokens SET revoked=1 WHERE token=?', (row[0],))
+        conn.commit()
+
+    return jsonify({'success': True})
+
+
+@app.route('/calendar/<token>.ics')
+def ics_export(token):
+    """导出ICS文件"""
+    token = token.upper()
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT username, revoked FROM ics_tokens WHERE token=?', (token,))
+        row = c.fetchone()
+
+    if not row or row[1]:
+        return '订阅已失效或不存在', 404
+
+    username = row[0]
+
+    # 生成ICS内容
+    try:
+        ics_content = generate_ics(username)
+        return ics_content, 200, {
+            'Content-Type': 'text/calendar; charset=utf-8',
+            'Content-Disposition': f'attachment; filename="calendar_{username}.ics"',
+        }
+    except Exception as e:
+        logger.error('生成ICS文件失败 token=%s: %s', token, e)
+        return '生成日历文件失败', 500
 
 
 if __name__ == '__main__':
