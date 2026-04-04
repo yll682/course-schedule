@@ -135,6 +135,34 @@
             <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
             <div id="cache-clear-status" style="font-size:0.82rem;color:#52c41a;margin-top:8px;display:none"></div>
 
+            <!-- 日历订阅 -->
+            <div id="ics-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft);display:none">
+                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅</div>
+                <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
+
+                <div id="ics-content">
+                    <div id="ics-no-subscription">
+                        <button class="btn btn-primary" onclick="createIcsSubscription()">生成订阅链接</button>
+                        <div class="hint" style="margin-top:8px">
+                            生成ICS订阅链接后，你可以将其导入到Google日历、Apple日历、Outlook等第三方日历应用中，随时查看课表。
+                        </div>
+                    </div>
+
+                    <div id="ics-has-subscription" style="display:none">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                            <input type="text" id="ics-url" readonly style="flex:1;min-width:200px;padding:8px;font-size:0.85rem;border:1px solid var(--c-border-input);border-radius:6px;background:var(--c-subtle)">
+                            <button class="btn btn-default" onclick="copyIcsUrl()">复制链接</button>
+                            <button class="btn btn-default btn-danger" onclick="revokeIcsSubscription()">撤销订阅</button>
+                        </div>
+                        <div class="hint">
+                            订阅创建时间：<span id="ics-created-at"></span>
+                            <br>
+                            <strong>使用说明：</strong>将上述链接添加到日历应用的「订阅」或「添加外部日历」功能中即可。各平台会自动同步课表更新。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
                 <span>
                     <strong>高级选项</strong>
@@ -224,6 +252,13 @@
                 <label>第3、4节特殊时间教学楼标识</label>
                 <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
                 <div class="hint">地点包含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多个标识用英文逗号分隔，如 <code>教2,实2</code>。留空则不启用。</div>
+            </div>
+            <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" id="ics_enabled" disabled style="width:auto">
+                    <span>允许普通用户使用日历订阅</span>
+                </label>
+                <div class="hint">开启后，普通用户可以生成ICS订阅链接，导入到第三方日历应用（如Google日历、Apple日历）中查看课表。</div>
             </div>
             <div class="actions">
                 <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
@@ -341,6 +376,7 @@
                 document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('slot34_special_pattern').disabled = false;
+                document.getElementById('ics_enabled').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
                 loadAdminShares();
@@ -350,8 +386,12 @@
             if (data.slot34_special_pattern !== undefined) {
                 document.getElementById('slot34_special_pattern').value = data.slot34_special_pattern;
             }
+            if (data.ics_enabled !== undefined) {
+                document.getElementById('ics_enabled').checked = data.ics_enabled === 'true' || data.ics_enabled === true;
+            }
 
             loadAdvancedOptions();
+            loadIcsSubscription();
             loadShares();
         }
 
@@ -361,14 +401,15 @@
                 alert('间隔必须在 5 到 1440 分钟之间'); return;
             }
             const pattern = document.getElementById('slot34_special_pattern').value.trim();
+            const icsEnabled = document.getElementById('ics_enabled').checked;
             const btn = document.getElementById('save-admin-btn');
-            btn.disabled = true; btn.textContent = '保存中…';
+            btn.disabled = true; btn.textContent = '保存中...';
             try {
                 const resp = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern }),
+                    body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern, ics_enabled: icsEnabled }),
                 });
                 const data = await resp.json();
                 if (data.success) {
@@ -618,6 +659,94 @@
         function viewUserWeek(userIdx, week) {
             const u = adminUsersList[userIdx];
             location.href = `/?as=${encodeURIComponent(u.username)}&week=${week}`;
+        }
+
+        // ── 日历订阅 ─────────────────────────────────────────────────────────────
+        async function loadIcsSubscription() {
+            const section = document.getElementById('ics-section');
+            const disabledHint = document.getElementById('ics-disabled-hint');
+            const content = document.getElementById('ics-content');
+
+            try {
+                const resp = await fetch('/api/ics/status', { credentials: 'include' });
+                if (!resp.ok) return;
+                const data = await resp.json();
+
+                // 管理员未开启ICS功能时，整个区块不显示
+                if (!data.enabled) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+                disabledHint.style.display = 'none';
+                content.style.display = 'block';
+
+                if (data.has_subscription) {
+                    document.getElementById('ics-no-subscription').style.display = 'none';
+                    document.getElementById('ics-has-subscription').style.display = 'block';
+                    document.getElementById('ics-url').value = window.location.origin + data.url;
+                    document.getElementById('ics-created-at').textContent = new Date(data.created_at).toLocaleString();
+                } else {
+                    document.getElementById('ics-no-subscription').style.display = 'block';
+                    document.getElementById('ics-has-subscription').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('加载ICS订阅状态失败', e);
+            }
+        }
+
+        async function createIcsSubscription() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+
+            try {
+                const resp = await fetch('/api/ics/create', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    loadIcsSubscription();
+                } else {
+                    alert(data.error || '生成失败');
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '生成订阅链接';
+            }
+        }
+
+        function copyIcsUrl() {
+            const url = document.getElementById('ics-url');
+            url.select();
+            navigator.clipboard.writeText(url.value).then(() => {
+                alert('已复制订阅链接');
+            }).catch(() => {
+                alert('复制失败，请手动复制');
+            });
+        }
+
+        async function revokeIcsSubscription() {
+            if (!confirm('确认撤销日历订阅？撤销后，已导入的日历将不再更新。')) return;
+
+            try {
+                const resp = await fetch('/api/ics/revoke', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    loadIcsSubscription();
+                } else {
+                    alert(data.error || '撤销失败');
+                }
+            } catch (e) {
+                alert('请求失败，请重试');
+            }
         }
 
         init();
