@@ -582,32 +582,48 @@
                         // 地点
                         const location = course.location || '';
                         if (location) {
-                            // 📍 单独一行
-                            ctx.fillText('📍', x + margin + 6, textY);
-                            textY += infoLineHeight;
-                            // 地点内容换行显示
-                            const locLines = wrapText(ctx, location, maxWidth);
-                            const locLinesToShow = locLines.slice(0, 2);
-                            locLinesToShow.forEach((line, idx) => {
-                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
-                            });
-                            textY += (locLinesToShow.length > 0 ? locLinesToShow.length : 1) * infoLineHeight + 2;
+                            const locationText = '📍 ' + location;
+                            const textWidth = ctx.measureText(locationText).width;
+
+                            // 如果一行能放下，就不换行
+                            if (textWidth <= maxWidth) {
+                                ctx.fillText(locationText, x + margin + 6, textY);
+                                textY += infoLineHeight + 2;
+                            } else {
+                                // 一行放不下，emoji单独一行
+                                ctx.fillText('📍', x + margin + 6, textY);
+                                textY += infoLineHeight;
+                                const locLines = wrapText(ctx, location, maxWidth);
+                                const locLinesToShow = locLines.slice(0, 2);
+                                locLinesToShow.forEach((line, idx) => {
+                                    ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                });
+                                textY += (locLinesToShow.length > 0 ? locLinesToShow.length : 1) * infoLineHeight + 2;
+                            }
                         }
 
                         // 时间（根据设置决定是否显示）
                         if (showTime) {
                             const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                             const timeStr = courseTime || course.time_slots?.display || times[slot];
-                            // ⏰ 单独一行
-                            ctx.fillText('⏰', x + margin + 6, textY);
-                            textY += infoLineHeight;
-                            // 时间内容换行显示
-                            const timeLines = wrapText(ctx, timeStr, maxWidth);
-                            const timeLinesToShow = timeLines.slice(0, 2);
-                            timeLinesToShow.forEach((line, idx) => {
-                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
-                            });
-                            textY += (timeLinesToShow.length > 0 ? timeLinesToShow.length : 1) * infoLineHeight + 2;
+                            const timeText = '⏰ ' + timeStr;
+                            const textWidth = ctx.measureText(timeText).width;
+
+                            // 如果一行能放下，就不换行
+                            if (textWidth <= maxWidth) {
+                                ctx.fillText(timeText, x + margin + 6, textY);
+                                textY += infoLineHeight + 2;
+                            } else {
+                                // 一行放不下，emoji单独一行
+                                ctx.fillText('⏰', x + margin + 6, textY);
+                                textY += infoLineHeight;
+                                const timeLines = wrapText(ctx, timeStr, maxWidth);
+                                const timeLinesToShow = timeLines.slice(0, 2);
+                                timeLinesToShow.forEach((line, idx) => {
+                                    ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                });
+                                textY += (timeLinesToShow.length > 0 ? timeLinesToShow.length : 1) * infoLineHeight + 2;
+                            }
                         }
 
                         // 教师（最多2行）
