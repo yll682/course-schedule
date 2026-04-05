@@ -337,18 +337,20 @@
             }
         }
 
-        // 文字自动换行辅助函数
+        // 文字自动换行辅助函数（保护时间和数字不被拆分）
         function wrapText(ctx, text, maxWidth) {
-            const words = text.split('');
+            // 使用正则表达式将文本分割成单词、时间、数字等不可拆分的单元
+            // 匹配顺序：时间范围、单个时间、连续数字、其他字符（可拆分）
+            const tokens = text.match(/\d{1,2}:\d{2}-\d{1,2}:\d{2}|\d{1,2}:\d{2}|\d+|./g) || [];
             const lines = [];
             let currentLine = '';
 
-            for (let i = 0; i < words.length; i++) {
-                const testLine = currentLine + words[i];
+            for (let i = 0; i < tokens.length; i++) {
+                const testLine = currentLine + tokens[i];
                 const metrics = ctx.measureText(testLine);
-                if (metrics.width > maxWidth && i > 0) {
+                if (metrics.width > maxWidth && i > 0 && currentLine) {
                     lines.push(currentLine);
-                    currentLine = words[i];
+                    currentLine = tokens[i];
                 } else {
                     currentLine = testLine;
                 }
