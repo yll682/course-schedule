@@ -22,6 +22,7 @@ view_week2.py
 
 # 本地 IDE 配置
 .claude/
+CLAUDE.md
 
 # Docker 备份文件
 *.tar.gz

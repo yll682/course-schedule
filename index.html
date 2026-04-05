@@ -333,11 +333,33 @@
                 await renderCaptureToCanvas();
             } catch (error) {
                 console.error('截图失败', error);
-                alert('截图失败，请稍后重试');
+                alert('截图失败: ' + (error.message || error) + '\n请稍后重试');
             } finally {
                 btn.disabled = false;
                 updateBackWeekBtn();
             }
+        }
+
+        // 文字自动换行辅助函数
+        function wrapText(ctx, text, maxWidth) {
+            const words = text.split('');
+            const lines = [];
+            let currentLine = '';
+
+            for (let i = 0; i < words.length; i++) {
+                const testLine = currentLine + words[i];
+                const metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && i > 0) {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            if (currentLine) {
+                lines.push(currentLine);
+            }
+            return lines;
         }
 
         async function renderCaptureToCanvas() {
@@ -352,18 +374,51 @@
                 return;
             }
 
+            // 读取 CSS 变量（但背景强制白色，方便打印）
+            const computedStyle = getComputedStyle(document.documentElement);
+            const getColor = (varName, fallback) => computedStyle.getPropertyValue(varName).trim() || fallback;
+
+            const colors = {
+                bg: '#ffffff',  // 强制白色背景，方便打印
+                surface: getColor('--c-surface', '#ffffff'),
+                primary: getColor('--c-primary', '#1890ff'),
+                accent: getColor('--c-accent', '#1890ff'),
+                course: getColor('--c-course', '#e6f7ff'),
+                text: getColor('--c-text', '#333333'),
+                muted: getColor('--c-muted', '#999999'),
+                border: getColor('--c-grid', '#dddddd'),
+                subtle: getColor('--c-subtle', '#f0f0f0'),
+            };
+
             // 尺寸配置
-            const cellWidth = 100;
-            const cellHeight = 60;
+            const preset = getCapturePreset();
             const headerHeight = 50;
             const timeColWidth = 70;
             const padding = 20;
             const days = 7;
             const slots = 10;
+            const separatorHeight = 3;  // 分隔线高度
 
-            // 计算画布尺寸
-            const canvasWidth = timeColWidth + days * cellWidth + padding * 2;
-            const canvasHeight = headerHeight + slots * cellHeight + padding * 2 + 30;
+            let canvasWidth, canvasHeight, cellWidth, cellHeight;
+
+            if (preset.width && preset.minHeight) {
+                // A4 或自定义尺寸 - 计算填满整个页面的尺寸
+                canvasWidth = preset.width;
+                canvasHeight = preset.minHeight;
+
+                const availableWidth = canvasWidth - padding * 2;
+                const availableHeight = canvasHeight - padding * 2 - 50; // 预留顶部标题和底部提示
+
+                cellWidth = Math.floor((availableWidth - timeColWidth) / days);
+                // 根据 A4 高度反推 cellHeight，填满整个页面
+                cellHeight = Math.floor((availableHeight - headerHeight - 2 * separatorHeight) / slots);
+            } else {
+                // 当前设备
+                cellWidth = 100;
+                cellHeight = 60;
+                canvasWidth = timeColWidth + days * cellWidth + padding * 2;
+                canvasHeight = headerHeight + slots * cellHeight + 2 * separatorHeight + padding * 2 + 50;
+            }
 
             const canvas = document.createElement('canvas');
             canvas.width = canvasWidth;
@@ -371,29 +426,17 @@
             const ctx = canvas.getContext('2d');
 
             // 背景
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = colors.bg;
             ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
             // 标题
-            ctx.fillStyle = '#333333';
+            ctx.fillStyle = colors.text;
             ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
             const title = coursesData.metadata ?
                 `${coursesData.metadata.用户} · ${coursesData.metadata.班级} · ${coursesData.metadata.周次}` :
                 '课程表';
             ctx.fillText(title, canvasWidth / 2, padding + 12);
-
-            // 颜色配置
-            const colors = {
-                header: '#f5f5f5',
-                headerText: '#333333',
-                border: '#e0e0e0',
-                course: '#e6f7ff',
-                courseBorder: '#1890ff',
-                courseText: '#333333',
-                time: '#666666',
-                conflict: '#ff4d4f',
-            };
 
             const weekMap = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
             const weekOrder = ['1','2','3','4','5','6','0'];
@@ -405,8 +448,39 @@
                 9:'19:00-19:45', 10:'19:55-20:40',
             };
 
+            // 计算 slot 的 Y 坐标（考虑分隔线）
+            function getSlotY(slot) {
+                // 分隔线在第4节和第8节后面
+                let y = padding + 30 + headerHeight;
+                if (slot <= 4) {
+                    y += (slot - 1) * cellHeight;
+                } else if (slot <= 8) {
+                    y += 4 * cellHeight + separatorHeight + (slot - 5) * cellHeight;
+                } else {
+                    y += 4 * cellHeight + separatorHeight + 4 * cellHeight + separatorHeight + (slot - 9) * cellHeight;
+                }
+                return y;
+            }
+
+            // 绘制分隔线（中午和傍晚）
+            const separatorY1 = getSlotY(4) + cellHeight;  // 第4节后
+            const separatorY2 = getSlotY(8) + cellHeight;  // 第8节后
+
+            ctx.fillStyle = colors.border;
+            ctx.fillRect(padding, separatorY1, canvasWidth - padding * 2, separatorHeight);
+            ctx.fillRect(padding, separatorY2, canvasWidth - padding * 2, separatorHeight);
+
+            // 检查是否显示课程时间
+            const showTime = (() => {
+                try {
+                    return localStorage.getItem('schedule_show_course_time') !== '0';
+                } catch (_) {
+                    return true;
+                }
+            })();
+
             // 绘制表头背景
-            ctx.fillStyle = colors.header;
+            ctx.fillStyle = colors.primary;
             ctx.fillRect(padding, padding + 30, canvasWidth - padding * 2, headerHeight);
 
             // 绘制网格线
@@ -414,7 +488,7 @@
             ctx.lineWidth = 1;
 
             // 绘制"节次"单元格
-            ctx.fillStyle = colors.headerText;
+            ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('节次', padding + timeColWidth / 2, padding + 30 + headerHeight / 2 + 5);
@@ -426,25 +500,26 @@
                 const dateStr = dayData?.date ? dayData.date.slice(5) : '';
                 ctx.fillText(weekMap[day], x + cellWidth / 2, padding + 30 + headerHeight / 2 - 2);
                 ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
-                ctx.fillStyle = '#999999';
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
                 ctx.fillText(dateStr, x + cellWidth / 2, padding + 30 + headerHeight / 2 + 12);
-                ctx.fillStyle = colors.headerText;
+                ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
             });
 
             // 绘制节次列
             for (let slot = 1; slot <= slots; slot++) {
-                const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
-                ctx.fillStyle = colors.header;
+                const y = getSlotY(slot);
+                ctx.fillStyle = colors.subtle;
                 ctx.fillRect(padding, y, timeColWidth, cellHeight);
                 ctx.strokeStyle = colors.border;
                 ctx.strokeRect(padding, y, timeColWidth, cellHeight);
 
-                ctx.fillStyle = colors.time;
+                ctx.fillStyle = colors.text;
                 ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(`${slot}`, padding + timeColWidth / 2, y + cellHeight / 2 - 8);
                 ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.fillStyle = colors.muted;
                 ctx.fillText(times[slot], padding + timeColWidth / 2, y + cellHeight / 2 + 8);
             }
 
@@ -460,9 +535,9 @@
 
                     if (course) {
                         const x = padding + timeColWidth + di * cellWidth;
-                        const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
+                        const y = getSlotY(slot);
                         const duration = course.time_slots.duration || 1;
-                        const height = duration * cellHeight - 4;
+                        const height = duration * cellHeight - 8;  // 增加上下边距
 
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot + i}`] = true;
 
@@ -477,42 +552,95 @@
                         }) || [];
                         const hasConflict = conflicts.length > 0;
 
-                        // 课程背景
+                        // 课程背景（增加边距）
+                        const margin = 4;
                         ctx.fillStyle = colors.course;
-                        ctx.fillRect(x + 2, y + 2, cellWidth - 4, height);
-                        ctx.strokeStyle = hasConflict ? colors.conflict : colors.courseBorder;
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x + 2, y + 2, cellWidth - 4, height);
+                        ctx.fillRect(x + margin, y + margin, cellWidth - margin * 2, height);
+
+                        // 左边框
+                        ctx.fillStyle = hasConflict ? '#ff4d4f' : colors.accent;
+                        ctx.fillRect(x + margin, y + margin, 3, height);
 
                         // 课程文字
-                        ctx.fillStyle = colors.courseText;
+                        ctx.fillStyle = colors.text;
                         ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                         ctx.textAlign = 'left';
 
+                        const maxWidth = cellWidth - margin * 2 - 6;
+                        const lineHeight = 13;
+                        const infoLineHeight = 12;
+                        let textY = y + margin + 16;  // 增加顶部距离
+
+                        // 绘制课程名（最多2行）
                         const courseName = course.course_name || '';
-                        const maxWidth = cellWidth - 12;
-                        let displayName = courseName;
-                        if (ctx.measureText(courseName).width > maxWidth) {
-                            displayName = courseName.substring(0, 6) + '...';
-                        }
-                        ctx.fillText(displayName, x + 6, y + 16);
+                        const nameLines = wrapText(ctx, courseName, maxWidth);
+                        const nameLinesToShow = nameLines.slice(0, 2);
+                        nameLinesToShow.forEach((line, idx) => {
+                            ctx.fillText(line, x + margin + 6, textY + idx * lineHeight);
+                        });
+                        textY += nameLinesToShow.length * lineHeight + 2;
 
                         ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
-                        ctx.fillStyle = '#666666';
-                        const location = course.location || '';
-                        ctx.fillText('📍 ' + (location.length > 8 ? location.substring(0, 7) + '…' : location), x + 6, y + 30);
+                        ctx.fillStyle = colors.muted;
 
-                        const timeStr = course.time_slots?.display || times[slot];
-                        ctx.fillText('⏰ ' + timeStr, x + 6, y + 44);
+                        // 地点
+                        const location = course.location || '';
+                        if (location) {
+                            // 📍 单独一行
+                            ctx.fillText('📍', x + margin + 6, textY);
+                            textY += infoLineHeight;
+                            // 地点内容换行显示
+                            const locLines = wrapText(ctx, location, maxWidth);
+                            const locLinesToShow = locLines.slice(0, 2);
+                            locLinesToShow.forEach((line, idx) => {
+                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                            });
+                            textY += (locLinesToShow.length > 0 ? locLinesToShow.length : 1) * infoLineHeight + 2;
+                        }
+
+                        // 时间（根据设置决定是否显示）
+                        if (showTime) {
+                            const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
+                            const timeStr = courseTime || course.time_slots?.display || times[slot];
+                            // ⏰ 单独一行
+                            ctx.fillText('⏰', x + margin + 6, textY);
+                            textY += infoLineHeight;
+                            // 时间内容换行显示
+                            const timeLines = wrapText(ctx, timeStr, maxWidth);
+                            const timeLinesToShow = timeLines.slice(0, 2);
+                            timeLinesToShow.forEach((line, idx) => {
+                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                            });
+                            textY += (timeLinesToShow.length > 0 ? timeLinesToShow.length : 1) * infoLineHeight + 2;
+                        }
+
+                        // 教师（最多2行）
+                        const teacher = course.teacher || '';
+                        if (teacher) {
+                            const teacherText = '👨‍🏫 ' + teacher;
+                            const teacherLines = wrapText(ctx, teacherText, maxWidth);
+                            const teacherLinesToShow = teacherLines.slice(0, 2);
+                            teacherLinesToShow.forEach((line, idx) => {
+                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                            });
+                            textY += teacherLinesToShow.length * infoLineHeight + 2;
+                        }
 
                         if (hasConflict) {
-                            ctx.fillStyle = colors.conflict;
-                            ctx.fillText(`⚠️ +${conflicts.length}门冲突`, x + 6, y + height - 6);
+                            ctx.fillStyle = '#ff4d4f';
+                            ctx.fillText(`⚠️ +${conflicts.length}门冲突`, x + margin + 6, y + height - 4);
                         }
+
+                        // 绘制单元格网格线
+                        ctx.strokeStyle = colors.border;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x, y, cellWidth, cellHeight * duration);
                     } else {
                         // 空单元格
                         const x = padding + timeColWidth + di * cellWidth;
-                        const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
+                        const y = getSlotY(slot);
+                        ctx.fillStyle = colors.surface;
+                        ctx.fillRect(x, y, cellWidth, cellHeight);
                         ctx.strokeStyle = colors.border;
                         ctx.lineWidth = 1;
                         ctx.strokeRect(x, y, cellWidth, cellHeight);
@@ -520,11 +648,7 @@
                 });
             }
 
-            // 底部提示
-            ctx.fillStyle = '#999999';
-            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('长按图片保存', canvasWidth / 2, canvasHeight - 8);
+            // 底部提示（已移除，改为在弹窗中显示）
 
             // 显示图片
             showCaptureModal(canvas);
@@ -904,10 +1028,17 @@
                         const hasConflict = uniqueCourses.length > 1;
                         const conflictMark = hasConflict ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
 
-                        // 检查是否显示课程时间
+                        // 检查是否显示课程时间和地点
                         const showTime = (() => {
                             try {
                                 return localStorage.getItem('schedule_show_course_time') !== '0';
+                            } catch (_) {
+                                return true;
+                            }
+                        })();
+                        const showLocation = (() => {
+                            try {
+                                return localStorage.getItem('schedule_show_course_location') !== '0';
                             } catch (_) {
                                 return true;
                             }
@@ -917,7 +1048,7 @@
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
                                 <div class="course" data-key="${esc(key)}" style="${hasConflict ? 'border-left-color:#ff4d4f;' : ''}">
                                     <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
-                                    <div class="course-info">📍 ${esc(course.location)}</div>
+                                    ${showLocation ? `<div class="course-info">📍 ${esc(course.location)}</div>` : ''}
                                     ${showTime ? `<div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>` : ''}
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
                                     ${hasConflict ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${uniqueCourses.length - 1}门冲突</div>` : ''}
