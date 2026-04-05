@@ -73,14 +73,14 @@
             gap: 1px;
             background: var(--c-grid);
             border: 1px solid var(--c-grid);
-            min-width: 556px;
+            min-width: 600px;
+            max-width: 1000px;
         }
         .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; z-index: 1; display: flex; }
         .header {
             background: var(--c-primary);
             color: white; font-weight: bold; text-align: center;
             padding: 8px; font-size: clamp(0.82rem, 2vw, 0.96rem);
-            border: 1px solid rgba(255,255,255,0.3);
             flex-direction: column;
             justify-content: center;
         }
@@ -792,9 +792,20 @@
 
             // 绘制整个表格的外边框（包括表头）
             const tableBottomY = getSlotY(10) + cellHeight;
-            ctx.strokeStyle = colors.border;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(padding, padding + 30, tableRightX - padding, tableBottomY - (padding + 30));
+            const tableTopY = padding + 30;
+            const tableWidth = tableRightX - padding;
+            const tableHeight = tableBottomY - tableTopY;
+
+            // 使用 fillRect 精确绘制 1px 边框
+            ctx.fillStyle = colors.border;
+            // 左边框
+            ctx.fillRect(padding, tableTopY, 1, tableHeight);
+            // 右边框
+            ctx.fillRect(tableRightX - 1, tableTopY, 1, tableHeight);
+            // 上边框
+            ctx.fillRect(padding, tableTopY, tableWidth, 1);
+            // 下边框
+            ctx.fillRect(padding, tableBottomY - 1, tableWidth, 1);
 
             // 底部提示（已移除，改为在弹窗中显示）
 
@@ -1091,7 +1102,7 @@
                 `${esc(data.metadata.用户)} | ${esc(data.metadata.班级)} | ${esc(data.metadata.周次)} | 更新: ${updateTime}`;
 
             const weekMap   = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
-            const weekOrder = ['1','2','3','4','5','6','0'];
+            const weekOrder = ['1','2','3','4','5','6','0'];  // 主界面永远显示 7 天
             const table = document.getElementById('timetable');
 
             const times = {
