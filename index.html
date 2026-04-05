@@ -69,7 +69,7 @@
         .timetable {
             display: grid;
             grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
-            grid-template-rows: 62px 62px 62px 62px 62px 3px 62px 62px 62px 62px 3px 62px 62px;
+            grid-template-rows: 50px 62px 62px 62px 62px 3px 62px 62px 62px 62px 3px 62px 62px;
             gap: 1px;
             background: var(--c-grid);
             border: 1px solid var(--c-grid);
@@ -789,6 +789,12 @@
             ctx.moveTo(tableRightX, separatorY2 + 0.5);
             ctx.lineTo(tableRightX, separatorY2 + 4.5);
             ctx.stroke();
+
+            // 绘制整个表格的外边框（包括表头）
+            const tableBottomY = getSlotY(10) + cellHeight;
+            ctx.strokeStyle = colors.border;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(padding, padding + 30, tableRightX - padding, tableBottomY - (padding + 30));
 
             // 底部提示（已移除，改为在弹窗中显示）
 
