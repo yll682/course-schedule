@@ -387,11 +387,18 @@
                 subtle: getColor('--c-subtle', '#f0f0f0'),
             };
 
+            // 检查周末是否有课
+            const saturdayData = coursesData.完整课表?.find(d => d.weekday === '6');
+            const sundayData = coursesData.完整课表?.find(d => d.weekday === '0');
+            const hasSaturdayClass = saturdayData?.courses && saturdayData.courses.length > 0;
+            const hasSundayClass = sundayData?.courses && sundayData.courses.length > 0;
+            const showWeekend = hasSaturdayClass || hasSundayClass;
+
             // 尺寸配置 - 固定使用A4尺寸
             const headerHeight = 50;
             const timeColWidth = 70;
             const padding = 20;
-            const days = 7;
+            const days = showWeekend ? 7 : 5;  // 根据是否有周末课决定显示天数
             const slots = 10;
             const separatorHeight = 3;  // 分隔线高度
 
@@ -428,7 +435,7 @@
             ctx.fillText(title, canvasWidth / 2, padding + 12);
 
             const weekMap = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
-            const weekOrder = ['1','2','3','4','5','6','0'];
+            const weekOrder = showWeekend ? ['1','2','3','4','5','6','0'] : ['1','2','3','4','5'];
             const times = {
                 1:'08:30-09:15', 2:'09:20-10:05',
                 3:'10:25-11:10', 4:'11:15-12:00',
