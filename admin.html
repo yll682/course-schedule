@@ -118,10 +118,6 @@
             background: var(--c-subtle);
         }
         .advanced-panel.open { display: block; }
-        .advanced-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
-        }
         .advanced-summary { font-size: 0.78rem; color: var(--c-muted); }
         /* ── 班级分组 ── */
         .class-group { margin-bottom: 12px; }
@@ -174,30 +170,29 @@
                 <span id="advanced-toggle-icon">▾</span>
             </button>
             <div class="advanced-panel" id="advanced-panel">
-                <div class="advanced-grid">
-                    <div class="field" style="margin:0">
-                        <label for="home-button-mode">左上角按钮</label>
-                        <select id="home-button-mode" onchange="saveAdvancedOptions()">
-                            <option value="back_to_week">回本周</option>
-                            <option value="capture">截图</option>
-                        </select>
-                    </div>
-                    <div class="field" style="margin:0">
+                <!-- 按钮设置 -->
+                <div class="field" style="margin:0 0 12px 0">
+                    <label for="home-button-mode">左上角按钮功能</label>
+                    <select id="home-button-mode" onchange="saveAdvancedOptions()">
+                        <option value="back_to_week">回本周</option>
+                        <option value="capture">截图</option>
+                    </select>
+                </div>
+
+                <!-- 显示设置 -->
+                <div style="padding-top:12px;border-top:1px solid var(--c-border-soft)">
+                    <div style="font-size:0.82rem;font-weight:500;color:var(--c-muted);margin-bottom:8px">课程卡片显示</div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked style="width:auto">
-                            <span>显示课程时间</span>
+                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
+                            <span style="font-size:0.88rem">显示上课时间</span>
                         </label>
-                        <div class="hint" style="margin-top:4px">在课程卡片下方显示上课时间</div>
-                    </div>
-                    <div class="field" style="margin:0">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked style="width:auto">
-                            <span>显示课程地点</span>
+                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
+                            <span style="font-size:0.88rem">显示上课地点</span>
                         </label>
-                        <div class="hint" style="margin-top:4px">在课程卡片下方显示上课地点</div>
                     </div>
                 </div>
-                <div class="hint">截图和显示设置仅保存在当前浏览器。</div>
 
                 <!-- 主题色 -->
                 <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
