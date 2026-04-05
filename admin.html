@@ -196,6 +196,13 @@
                         </label>
                         <div class="hint" style="margin-top:4px">在课程卡片下方显示上课时间</div>
                     </div>
+                    <div class="field" style="margin:0">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked style="width:auto">
+                            <span>显示课程地点</span>
+                        </label>
+                        <div class="hint" style="margin-top:4px">在课程卡片下方显示上课地点</div>
+                    </div>
                 </div>
                 <div class="hint">截图和显示设置仅保存在当前浏览器。</div>
 
@@ -304,17 +311,6 @@
                 <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
             </div>
 
-            <!-- 日历订阅权限 -->
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
-                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅权限</div>
-                <div class="field" style="margin-bottom:0">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                        <input type="checkbox" id="ics_enabled" disabled style="width:auto">
-                        <span>允许普通用户使用日历订阅</span>
-                    </label>
-                    <div class="hint">开启后，普通用户可以在高级选项中生成ICS订阅链接，导入到第三方日历应用中查看课表。</div>
-                </div>
-            </div>
 
             <!-- 分享码管理 -->
             <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
@@ -370,6 +366,7 @@
         const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
         const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
         const SHOW_COURSE_TIME_KEY = 'schedule_show_course_time';
+        const SHOW_COURSE_LOCATION_KEY = 'schedule_show_course_location';
         const THEME_COLOR_KEY = 'schedule_theme_color';
 
         const THEME_COLORS = [
@@ -428,6 +425,26 @@
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        function formatLoginTime(isoString) {
+            if (!isoString) return '未知';
+
+            const date = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return '刚刚';
+            if (diffMins < 60) return `${diffMins}分钟前`;
+            if (diffHours < 24) return `${diffHours}小时前`;
+            if (diffDays === 1) return '昨天 ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            if (diffDays < 7) return `${diffDays}天前`;
+
+            return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }) + ' ' +
+                   date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+
         function readLocalPreference(key, fallback) {
             try {
                 const value = localStorage.getItem(key);
@@ -471,9 +488,11 @@
             const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
             const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
             const showTime = readLocalPreference(SHOW_COURSE_TIME_KEY, '1');
+            const showLocation = readLocalPreference(SHOW_COURSE_LOCATION_KEY, '1');
             document.getElementById('home-button-mode').value = mode;
             document.getElementById('capture-size-preset').value = preset;
             document.getElementById('show-course-time').checked = showTime === '1';
+            document.getElementById('show-course-location').checked = showLocation === '1';
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
             loadThemeColors();
         }
@@ -513,9 +532,11 @@
             const mode = document.getElementById('home-button-mode').value;
             const preset = document.getElementById('capture-size-preset').value;
             const showTime = document.getElementById('show-course-time').checked ? '1' : '0';
+            const showLocation = document.getElementById('show-course-location').checked ? '1' : '0';
             writeLocalPreference(BUTTON_MODE_KEY, mode);
             writeLocalPreference(CAPTURE_PRESET_KEY, preset);
             writeLocalPreference(SHOW_COURSE_TIME_KEY, showTime);
+            writeLocalPreference(SHOW_COURSE_LOCATION_KEY, showLocation);
             showAdvancedSaveStatus();
         }
 
@@ -542,7 +563,6 @@
                 document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('slot34_special_pattern').disabled = false;
-                document.getElementById('ics_enabled').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
                 loadGroups();
@@ -552,9 +572,6 @@
 
             if (data.slot34_special_pattern !== undefined) {
                 document.getElementById('slot34_special_pattern').value = data.slot34_special_pattern;
-            }
-            if (data.ics_enabled !== undefined) {
-                document.getElementById('ics_enabled').checked = data.ics_enabled === 'true' || data.ics_enabled === true;
             }
 
             loadAdvancedOptions();
@@ -568,14 +585,13 @@
                 alert('间隔必须在 5 到 1440 分钟之间'); return;
             }
             const pattern = document.getElementById('slot34_special_pattern').value.trim();
-            const icsEnabled = document.getElementById('ics_enabled').checked;
             const btn = document.getElementById('save-admin-btn');
             btn.disabled = true; btn.textContent = '保存中...';
             try {
                 const resp = await safeFetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern, ics_enabled: icsEnabled }),
+                    body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern }),
                 });
                 const data = await resp.json();
                 if (data.success) {
@@ -821,7 +837,7 @@
                     const chips = u.cached_weeks.map(w =>
                         `<button class="week-chip" onclick="viewUserWeek(${u._index}, ${w})">第${w}周</button>`
                     ).join('');
-                    const loginStr = u.last_login ? new Date(u.last_login).toLocaleDateString() : '未知';
+                    const loginStr = formatLoginTime(u.last_active);
                     const groupLabel = u.group_name ? `<span style="color:var(--c-primary);font-size:0.75rem;margin-left:4px" class="user-group-tag" data-username="${esc(u.username)}">[${esc(u.group_name)}]</span>` : '';
                     return `<div class="user-row">
                         <div class="user-row-head">
@@ -831,7 +847,7 @@
                             </span>
                             <span>
                                 <button class="btn btn-default" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})" style="padding:2px 6px;font-size:0.72rem">设置组</button>
-                                <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近登录 ${loginStr}</span>
+                                <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近活跃 ${loginStr}</span>
                             </span>
                         </div>
                         <div class="week-chips">${chips || '<span style="color:#aaa;font-size:0.8rem">无缓存数据</span>'}</div>
@@ -912,11 +928,27 @@
 
         async function saveDefaultGroup() {
             const groupId = document.getElementById('default-group-select').value;
-            await safeFetch('/api/admin/settings/default_group', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ default_group_id: parseInt(groupId) }),
-            });
+            try {
+                const resp = await safeFetch('/api/admin/settings/default_group', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ default_group_id: parseInt(groupId) }),
+                });
+                const result = await resp.json();
+                if (!resp.ok) {
+                    alert(result.error || '保存失败');
+                    return;
+                }
+                // 显示成功提示
+                const select = document.getElementById('default-group-select');
+                const hint = document.createElement('span');
+                hint.style.cssText = 'color:#52c41a;font-size:0.82rem;margin-left:8px';
+                hint.textContent = '✓ 已保存';
+                select.parentElement.appendChild(hint);
+                setTimeout(() => hint.remove(), 2000);
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
         }
 
         let editingGroupId = null;
@@ -981,10 +1013,9 @@
                     : '/api/admin/groups';
                 const method = editingGroupId ? 'PUT' : 'POST';
 
-                const resp = await fetch(url, {
+                const resp = await safeFetch(url, {
                     method,
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify(data),
                 });
 
@@ -996,6 +1027,8 @@
 
                 closeGroupModal();
                 await loadGroups();
+                // 显示成功提示
+                alert(editingGroupId ? '用户组更新成功！' : '用户组创建成功！');
             } catch (err) {
                 alert('保存失败: ' + err.message);
             }
@@ -1005,9 +1038,8 @@
             if (!confirm('确定删除此用户组？组内用户将移至默认组。')) return;
 
             try {
-                const resp = await fetch(`/api/admin/groups/${groupId}`, {
+                const resp = await safeFetch(`/api/admin/groups/${groupId}`, {
                     method: 'DELETE',
-                    credentials: 'include',
                 });
 
                 const result = await resp.json();
@@ -1017,6 +1049,7 @@
                 }
 
                 await loadGroups();
+                alert('用户组删除成功！');
             } catch (err) {
                 alert('删除失败: ' + err.message);
             }
@@ -1036,7 +1069,6 @@
                     <div style="font-size:0.85rem;color:var(--c-muted);margin-bottom:12px">用户: ${esc(username)}</div>
                     <div class="field" style="margin-bottom:16px">
                         <select id="user-group-select">
-                            <option value="">未分组</option>
                             ${options}
                         </select>
                     </div>
@@ -1060,10 +1092,9 @@
             const groupId = select.value ? parseInt(select.value) : null;
 
             try {
-                const resp = await fetch(`/api/admin/users/${encodeURIComponent(username)}/group`, {
+                const resp = await safeFetch(`/api/admin/users/${encodeURIComponent(username)}/group`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify({ group_id: groupId }),
                 });
 
@@ -1075,6 +1106,8 @@
 
                 closeUserGroupModal();
                 await loadUsers();
+                // 显示成功提示
+                alert('用户组设置成功！');
             } catch (err) {
                 alert('保存失败: ' + err.message);
             }

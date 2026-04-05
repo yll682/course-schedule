@@ -228,9 +228,11 @@ def init_db():
                          VALUES ('默认组', 1, 1)''')
             c.execute('''INSERT INTO user_groups (name, can_use_ics, can_create_share)
                          VALUES ('受限组', 0, 0)''')
+            # 将所有现有用户设置为默认组
+            c.execute('UPDATE users SET group_id = 1 WHERE group_id IS NULL')
         for col_def in [
             'jw_token TEXT', 'token_time TEXT', 'jw_name TEXT',
-            'jw_class TEXT', 'jw_kbjcmsid TEXT', 'password_enc TEXT',
+            'jw_class TEXT', 'jw_kbjcmsid TEXT', 'password_enc TEXT', 'last_active TEXT',
         ]:
             try:
                 c.execute(f'ALTER TABLE users ADD COLUMN {col_def}')
@@ -550,10 +552,14 @@ def get_user():
     if 'username' not in session:
         return jsonify({'logged_in': False})
     username = session['username']
+    now = datetime.now().isoformat()
     with _db() as conn:
         c = conn.cursor()
         c.execute('SELECT jw_name FROM users WHERE username=?', (username,))
         row = c.fetchone()
+        # 更新最近活跃时间
+        c.execute('UPDATE users SET last_active=? WHERE username=?', (now, username))
+        conn.commit()
     name = (row[0] or username) if row else username
     return jsonify({
         'logged_in':              True,
@@ -705,13 +711,6 @@ def settings():
             with _db() as conn:
                 conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
                              ('slot34_special_pattern', pattern))
-                conn.commit()
-        # ics_enabled：管理员专属
-        if 'ics_enabled' in data and is_admin:
-            enabled = 'true' if data['ics_enabled'] else 'false'
-            with _db() as conn:
-                conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
-                             ('ics_enabled', enabled))
                 conn.commit()
         return jsonify({'success': True})
 
@@ -961,9 +960,9 @@ def admin_list_users():
 
     with _db() as conn:
         c = conn.cursor()
-        c.execute('''SELECT u.username, u.jw_name, u.jw_class, u.last_login, u.group_id, g.name
+        c.execute('''SELECT u.username, u.jw_name, u.jw_class, u.last_active, u.last_login, u.group_id, g.name
                      FROM users u LEFT JOIN user_groups g ON u.group_id = g.id
-                     ORDER BY u.last_login DESC''')
+                     ORDER BY u.last_active DESC, u.last_login DESC''')
         users = c.fetchall()
         result = []
         for u in users:
@@ -973,10 +972,10 @@ def admin_list_users():
                 'username':     u[0],
                 'name':         u[1] or u[0],
                 'class_name':   u[2] or '',
-                'last_login':   u[3] or '',
+                'last_active':  u[3] or u[4] or '',  # 优先使用 last_active
                 'cached_weeks': cached_weeks,
-                'group_id':     u[4],
-                'group_name':   u[5] or '',
+                'group_id':     u[5],
+                'group_name':   u[6] or '',
             })
     return jsonify({'users': result})
 
@@ -1100,20 +1099,22 @@ def admin_set_user_group(username):
     data = request.get_json() or {}
     group_id = data.get('group_id')
 
+    # 如果 group_id 为 None，则设置为默认组
+    if group_id is None:
+        group_id = _get_default_group_id()
+
     with _db() as conn:
         c = conn.cursor()
-        if group_id is None:
-            c.execute('UPDATE users SET group_id = NULL WHERE username = ?', (username,))
-        else:
-            c.execute('SELECT id FROM user_groups WHERE id = ?', (group_id,))
-            if not c.fetchone():
-                return jsonify({'error': '用户组不存在'}), 404
-            c.execute('UPDATE users SET group_id = ? WHERE username = ?', (group_id, username))
+        c.execute('SELECT id FROM user_groups WHERE id = ?', (group_id,))
+        if not c.fetchone():
+            return jsonify({'error': '用户组不存在'}), 404
+        c.execute('UPDATE users SET group_id = ? WHERE username = ?', (group_id, username))
         conn.commit()
     return jsonify({'success': True})
 
 
 @app.route('/api/admin/settings/default_group', methods=['GET', 'PUT'])
+@csrf_protected
 def admin_default_group():
     """获取或设置默认用户组"""
     if 'username' not in session or not session.get('is_admin'):
@@ -1251,8 +1252,13 @@ def _can_use_ics(username: str, is_admin: bool) -> bool:
     group = _get_user_group(username)
     if group:
         return group['can_use_ics']
-    # 未分组的用户使用全局设置
-    return get_setting('ics_enabled', 'false').lower() == 'true'
+    # 未分组的用户使用默认组权限
+    default_group_id = _get_default_group_id()
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT can_use_ics FROM user_groups WHERE id = ?', (default_group_id,))
+        row = c.fetchone()
+        return bool(row[0]) if row else False
 
 def _can_create_share(username: str, is_admin: bool) -> bool:
     """检查用户是否可以创建分享码"""
@@ -1262,8 +1268,13 @@ def _can_create_share(username: str, is_admin: bool) -> bool:
     group = _get_user_group(username)
     if group:
         return group['can_create_share']
-    # 未分组的用户默认可以创建
-    return True
+    # 未分组的用户使用默认组权限
+    default_group_id = _get_default_group_id()
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT can_create_share FROM user_groups WHERE id = ?', (default_group_id,))
+        row = c.fetchone()
+        return bool(row[0]) if row else False
 
 
 def _get_slot_time_range(start_slot: int, duration: int, location: str = '') -> tuple:

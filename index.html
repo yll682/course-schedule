@@ -323,6 +323,9 @@
             const btn = document.getElementById('back-week-btn');
             if (!btn) return;
 
+            // 重新加载截图设置，确保使用最新的配置
+            loadHeaderPreferences();
+
             const now = new Date();
             const dateLabel = `${now.getMonth() + 1}/${now.getDate()}`;
             btn.disabled = true;
@@ -421,9 +424,14 @@
             }
 
             const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+            // 使用设备像素比提高清晰度
+            const dpr = Math.max(window.devicePixelRatio || 1, 2);
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            canvas.style.width = canvasWidth + 'px';
+            canvas.style.height = canvasHeight + 'px';
             const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
 
             // 背景
             ctx.fillStyle = colors.bg;
