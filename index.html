@@ -402,7 +402,7 @@
             const padding = 20;
             const days = showWeekend ? 7 : 5;  // 根据是否有周末课决定显示天数
             const slots = 10;
-            const separatorHeight = 3;  // 分隔线高度
+            const separatorHeight = 5;  // 分隔线总高度（双线 + 间距：1px + 3px + 1px）
 
             // A4 尺寸 (595 x 842)
             const canvasWidth = 595;
@@ -460,13 +460,9 @@
                 return y;
             }
 
-            // 绘制分隔线（中午和傍晚）
+            // 分隔线坐标计算
             const separatorY1 = getSlotY(4) + cellHeight;  // 第4节后
             const separatorY2 = getSlotY(8) + cellHeight;  // 第8节后
-
-            ctx.fillStyle = colors.border;
-            ctx.fillRect(padding, separatorY1, canvasWidth - padding * 2, separatorHeight);
-            ctx.fillRect(padding, separatorY2, canvasWidth - padding * 2, separatorHeight);
 
             // 检查是否显示课程时间
             const showTime = (() => {
@@ -535,7 +531,19 @@
                         const x = padding + timeColWidth + di * cellWidth;
                         const y = getSlotY(slot);
                         const duration = course.time_slots.duration || 1;
-                        const height = duration * cellHeight - 8;  // 增加上下边距
+
+                        // 计算课程高度，考虑跨过分隔线的情况
+                        let height = duration * cellHeight - 8;  // 基础高度（减去上下边距）
+                        const endSlot = slot + duration - 1;
+
+                        // 检查是否跨过中午分隔线（第4节后）
+                        if (slot <= 4 && endSlot > 4) {
+                            height += separatorHeight;
+                        }
+                        // 检查是否跨过傍晚分隔线（第8节后）
+                        if (slot <= 8 && endSlot > 8) {
+                            height += separatorHeight;
+                        }
 
                         for (let i = 0; i < duration; i++) occupied[`${day}-${slot + i}`] = true;
 
@@ -550,7 +558,7 @@
                         }) || [];
                         const hasConflict = conflicts.length > 0;
 
-                        // 课程背景（增加边距）
+                        // 课程背景（完整绘制，覆盖分隔线）
                         const margin = 4;
                         ctx.fillStyle = colors.course;
                         ctx.fillRect(x + margin, y + margin, cellWidth - margin * 2, height);
@@ -646,9 +654,17 @@
                         }
 
                         // 绘制单元格网格线
+                        // 计算网格线高度，考虑跨过分隔线的情况
+                        let gridHeight = duration * cellHeight;
+                        if (slot <= 4 && endSlot > 4) {
+                            gridHeight += separatorHeight;
+                        }
+                        if (slot <= 8 && endSlot > 8) {
+                            gridHeight += separatorHeight;
+                        }
                         ctx.strokeStyle = colors.border;
                         ctx.lineWidth = 1;
-                        ctx.strokeRect(x, y, cellWidth, cellHeight * duration);
+                        ctx.strokeRect(x, y, cellWidth, gridHeight);
                     } else {
                         // 空单元格
                         const x = padding + timeColWidth + di * cellWidth;
@@ -661,6 +677,94 @@
                     }
                 });
             }
+
+            // 绘制分隔线（中午和傍晚）- 双实线，最后绘制并避让跨过的课程
+            // 分隔线由三部分组成：上边框(1px) + 中间区域(3px) + 下边框(1px) = 5px
+
+            // 辅助函数：检查指定列在分隔线位置是否有课程跨过
+            function hasCourseCrossingSeparator(separatorY, dayIndex) {
+                const day = weekOrder[dayIndex];
+                const dayData = coursesData.完整课表?.find(d => d.weekday === day);
+                if (!dayData?.courses) return false;
+
+                // 检查是否有课程跨过该分隔线
+                return dayData.courses.some(course => {
+                    const start = course.time_slots.start_slot;
+                    const duration = course.time_slots.duration;
+                    const end = start + duration - 1;
+
+                    // 第4节后的分隔线
+                    if (separatorY === separatorY1) {
+                        return start <= 4 && end > 4;
+                    }
+                    // 第8节后的分隔线
+                    if (separatorY === separatorY2) {
+                        return start <= 8 && end > 8;
+                    }
+                    return false;
+                });
+            }
+
+            // 绘制分隔线，逐列检测
+            for (let di = 0; di < days; di++) {
+                const x = padding + timeColWidth + di * cellWidth;
+
+                // 第一条分隔线（中午）
+                if (!hasCourseCrossingSeparator(separatorY1, di)) {
+                    // 该列没有课程跨过，绘制完整分隔线
+                    ctx.fillStyle = colors.surface;
+                    ctx.fillRect(x, separatorY1 + 1, cellWidth, 3);
+                    ctx.fillStyle = colors.border;
+                    ctx.fillRect(x, separatorY1, cellWidth, 1);
+                    ctx.fillRect(x, separatorY1 + 4, cellWidth, 1);
+                }
+                // 如果有课程跨过，不绘制该列的分隔线
+
+                // 第二条分隔线（傍晚）
+                if (!hasCourseCrossingSeparator(separatorY2, di)) {
+                    // 该列没有课程跨过，绘制完整分隔线
+                    ctx.fillStyle = colors.surface;
+                    ctx.fillRect(x, separatorY2 + 1, cellWidth, 3);
+                    ctx.fillStyle = colors.border;
+                    ctx.fillRect(x, separatorY2, cellWidth, 1);
+                    ctx.fillRect(x, separatorY2 + 4, cellWidth, 1);
+                }
+                // 如果有课程跨过，不绘制该列的分隔线
+            }
+
+            // 时间列的分隔线始终绘制
+            ctx.fillStyle = colors.surface;
+            ctx.fillRect(padding, separatorY1 + 1, timeColWidth, 3);
+            ctx.fillRect(padding, separatorY2 + 1, timeColWidth, 3);
+            ctx.fillStyle = colors.border;
+            ctx.fillRect(padding, separatorY1, timeColWidth, 1);
+            ctx.fillRect(padding, separatorY1 + 4, timeColWidth, 1);
+            ctx.fillRect(padding, separatorY2, timeColWidth, 1);
+            ctx.fillRect(padding, separatorY2 + 4, timeColWidth, 1);
+
+            // 表格最左端和最右端的竖线（连接上下两条平行线）
+            // 与时间列和课程列的网格线对齐
+            ctx.strokeStyle = colors.border;
+            ctx.lineWidth = 1;
+            // 左端竖线（与时间列左边框对齐）
+            ctx.beginPath();
+            ctx.moveTo(padding, separatorY1 + 0.5);
+            ctx.lineTo(padding, separatorY1 + 4.5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(padding, separatorY2 + 0.5);
+            ctx.lineTo(padding, separatorY2 + 4.5);
+            ctx.stroke();
+            // 右端竖线（与最后一列右边框对齐）
+            const tableRightX = padding + timeColWidth + days * cellWidth;
+            ctx.beginPath();
+            ctx.moveTo(tableRightX, separatorY1 + 0.5);
+            ctx.lineTo(tableRightX, separatorY1 + 4.5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(tableRightX, separatorY2 + 0.5);
+            ctx.lineTo(tableRightX, separatorY2 + 4.5);
+            ctx.stroke();
 
             // 底部提示（已移除，改为在弹窗中显示）
 
