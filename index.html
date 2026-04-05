@@ -7,6 +7,20 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1890ff">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('schedule_theme_color');
+                if (saved) {
+                    var theme = JSON.parse(saved);
+                    var root = document.documentElement;
+                    root.style.setProperty('--c-primary', theme.primary);
+                    root.style.setProperty('--c-accent', theme.accent);
+                    root.style.setProperty('--c-course', theme.course);
+                }
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/style.css">
     <style>
         /* ── 顶栏 ── */
@@ -145,6 +159,45 @@
     </div>
 
     <script>
+        // ── CSRF Token 管理 ───────────────────────────────────────────────────────
+        let _csrfToken = null;
+
+        async function getCsrfToken() {
+            if (!_csrfToken) {
+                try {
+                    const resp = await fetch('/api/csrf-token', { credentials: 'include' });
+                    const data = await resp.json();
+                    _csrfToken = data.csrf_token;
+                } catch (e) {
+                    console.error('Failed to fetch CSRF token:', e);
+                }
+            }
+            return _csrfToken;
+        }
+
+        // 安全的 fetch 包装函数，自动添加 CSRF token
+        async function safeFetch(url, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+
+            // GET, HEAD, OPTIONS 不需要 CSRF token
+            if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                return fetch(url, options);
+            }
+
+            // 获取 CSRF token
+            const csrfToken = await getCsrfToken();
+            if (!csrfToken) {
+                throw new Error('无法获取安全令牌，请刷新页面重试');
+            }
+
+            // 添加 CSRF token 到请求头
+            options.headers = options.headers || {};
+            options.headers['X-CSRF-Token'] = csrfToken;
+            options.credentials = options.credentials || 'include';
+
+            return fetch(url, options);
+        }
+
         function esc(s) {
             return String(s ?? '')
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -268,76 +321,240 @@
 
         async function captureCurrentView() {
             const btn = document.getElementById('back-week-btn');
-            const container = document.querySelector('.container');
-            const wrapper = document.querySelector('.timetable-wrapper');
-            const table = document.getElementById('timetable');
-            const overlay = document.getElementById('modal-overlay');
-            if (!btn || !container || !wrapper || !table) return;
-            if (typeof html2canvas !== 'function') {
-                alert('截图组件加载失败，请刷新后重试');
-                return;
-            }
+            if (!btn) return;
 
-            const preset = getCapturePreset();
-            const original = {
-                btnDisabled: btn.disabled,
-                btnText: btn.textContent,
-                btnTitle: btn.title,
-                containerCssText: container.style.cssText,
-                wrapperCssText: wrapper.style.cssText,
-                tableCssText: table.style.cssText,
-                bodyCssText: document.body.style.cssText,
-                scrollX: window.scrollX,
-                scrollY: window.scrollY,
-            };
-            const overlayWasOpen = overlay.classList.contains('open');
+            const now = new Date();
+            const dateLabel = `${now.getMonth() + 1}/${now.getDate()}`;
+            btn.disabled = true;
+            btn.textContent = dateLabel;
+            btn.title = '正在生成';
 
             try {
-                closeModal();
-                const now = new Date();
-                const dateLabel = `${now.getMonth() + 1}/${now.getDate()}`;
-                btn.disabled = true;
-                btn.textContent = dateLabel;
-                btn.title = '正在生成截图';
-                btn.classList.remove('capture-mode');
-
-                if (preset.width) {
-                    container.style.maxWidth = `${preset.width}px`;
-                    container.style.width = `${preset.width}px`;
-                    container.style.margin = '0 auto';
-                    container.style.padding = '12px';
-                    container.style.minHeight = preset.minHeight ? `${preset.minHeight}px` : '';
-                    wrapper.style.overflowX = 'visible';
-                    table.style.minWidth = '0';
-                    document.body.style.padding = '0';
-                }
-
-                await waitForNextPaint();
-                const canvas = await html2canvas(container, {
-                    backgroundColor: getComputedStyle(document.body).backgroundColor,
-                    useCORS: true,
-                    scale: Math.max(window.devicePixelRatio || 1, 2),
-                });
-                const link = document.createElement('a');
-                link.href = canvas.toDataURL('image/png');
-                link.download = getCaptureFileName();
-                link.click();
+                await renderCaptureToCanvas();
             } catch (error) {
                 console.error('截图失败', error);
                 alert('截图失败，请稍后重试');
             } finally {
-                container.style.cssText = original.containerCssText;
-                wrapper.style.cssText = original.wrapperCssText;
-                table.style.cssText = original.tableCssText;
-                document.body.style.cssText = original.bodyCssText;
-                btn.disabled = original.btnDisabled;
-                btn.textContent = original.btnText;
-                btn.title = original.btnTitle;
-                if (overlayWasOpen) overlay.classList.add('open');
-                window.scrollTo(original.scrollX, original.scrollY);
+                btn.disabled = false;
                 updateBackWeekBtn();
             }
         }
+
+        async function renderCaptureToCanvas() {
+            const table = document.getElementById('timetable');
+            const meta = document.getElementById('meta');
+            if (!table || !meta) return;
+
+            // 课程数据
+            const coursesData = window._lastCoursesData;
+            if (!coursesData) {
+                alert('暂无课表数据');
+                return;
+            }
+
+            // 尺寸配置
+            const cellWidth = 100;
+            const cellHeight = 60;
+            const headerHeight = 50;
+            const timeColWidth = 70;
+            const padding = 20;
+            const days = 7;
+            const slots = 10;
+
+            // 计算画布尺寸
+            const canvasWidth = timeColWidth + days * cellWidth + padding * 2;
+            const canvasHeight = headerHeight + slots * cellHeight + padding * 2 + 30;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const ctx = canvas.getContext('2d');
+
+            // 背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // 标题
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            const title = coursesData.metadata ?
+                `${coursesData.metadata.用户} · ${coursesData.metadata.班级} · ${coursesData.metadata.周次}` :
+                '课程表';
+            ctx.fillText(title, canvasWidth / 2, padding + 12);
+
+            // 颜色配置
+            const colors = {
+                header: '#f5f5f5',
+                headerText: '#333333',
+                border: '#e0e0e0',
+                course: '#e6f7ff',
+                courseBorder: '#1890ff',
+                courseText: '#333333',
+                time: '#666666',
+                conflict: '#ff4d4f',
+            };
+
+            const weekMap = {'1':'周一','2':'周二','3':'周三','4':'周四','5':'周五','6':'周六','0':'周日'};
+            const weekOrder = ['1','2','3','4','5','6','0'];
+            const times = {
+                1:'08:30-09:15', 2:'09:20-10:05',
+                3:'10:25-11:10', 4:'11:15-12:00',
+                5:'14:30-15:15', 6:'15:25-16:10',
+                7:'16:20-17:05', 8:'17:15-18:00',
+                9:'19:00-19:45', 10:'19:55-20:40',
+            };
+
+            // 绘制表头背景
+            ctx.fillStyle = colors.header;
+            ctx.fillRect(padding, padding + 30, canvasWidth - padding * 2, headerHeight);
+
+            // 绘制网格线
+            ctx.strokeStyle = colors.border;
+            ctx.lineWidth = 1;
+
+            // 绘制"节次"单元格
+            ctx.fillStyle = colors.headerText;
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('节次', padding + timeColWidth / 2, padding + 30 + headerHeight / 2 + 5);
+
+            // 绘制星期表头
+            weekOrder.forEach((day, di) => {
+                const x = padding + timeColWidth + di * cellWidth;
+                const dayData = coursesData.完整课表?.find(d => d.weekday === day);
+                const dateStr = dayData?.date ? dayData.date.slice(5) : '';
+                ctx.fillText(weekMap[day], x + cellWidth / 2, padding + 30 + headerHeight / 2 - 2);
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.fillStyle = '#999999';
+                ctx.fillText(dateStr, x + cellWidth / 2, padding + 30 + headerHeight / 2 + 12);
+                ctx.fillStyle = colors.headerText;
+                ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            });
+
+            // 绘制节次列
+            for (let slot = 1; slot <= slots; slot++) {
+                const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
+                ctx.fillStyle = colors.header;
+                ctx.fillRect(padding, y, timeColWidth, cellHeight);
+                ctx.strokeStyle = colors.border;
+                ctx.strokeRect(padding, y, timeColWidth, cellHeight);
+
+                ctx.fillStyle = colors.time;
+                ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${slot}`, padding + timeColWidth / 2, y + cellHeight / 2 - 8);
+                ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.fillText(times[slot], padding + timeColWidth / 2, y + cellHeight / 2 + 8);
+            }
+
+            // 绘制课程
+            const occupied = {};
+            for (let slot = 1; slot <= slots; slot++) {
+                weekOrder.forEach((day, di) => {
+                    const key = `${day}-${slot}`;
+                    if (occupied[key]) return;
+
+                    const dayData = coursesData.完整课表?.find(d => d.weekday === day);
+                    const course = dayData?.courses?.find(c => c.time_slots.start_slot === slot);
+
+                    if (course) {
+                        const x = padding + timeColWidth + di * cellWidth;
+                        const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
+                        const duration = course.time_slots.duration || 1;
+                        const height = duration * cellHeight - 4;
+
+                        for (let i = 0; i < duration; i++) occupied[`${day}-${slot + i}`] = true;
+
+                        // 检查冲突
+                        const conflicts = dayData?.courses?.filter(c => {
+                            if (c === course) return false;
+                            const cStart = c.time_slots.start_slot;
+                            const cEnd = cStart + c.time_slots.duration - 1;
+                            const start = course.time_slots.start_slot;
+                            const end = start + duration - 1;
+                            return !(cEnd < start || cStart > end);
+                        }) || [];
+                        const hasConflict = conflicts.length > 0;
+
+                        // 课程背景
+                        ctx.fillStyle = colors.course;
+                        ctx.fillRect(x + 2, y + 2, cellWidth - 4, height);
+                        ctx.strokeStyle = hasConflict ? colors.conflict : colors.courseBorder;
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x + 2, y + 2, cellWidth - 4, height);
+
+                        // 课程文字
+                        ctx.fillStyle = colors.courseText;
+                        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                        ctx.textAlign = 'left';
+
+                        const courseName = course.course_name || '';
+                        const maxWidth = cellWidth - 12;
+                        let displayName = courseName;
+                        if (ctx.measureText(courseName).width > maxWidth) {
+                            displayName = courseName.substring(0, 6) + '...';
+                        }
+                        ctx.fillText(displayName, x + 6, y + 16);
+
+                        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                        ctx.fillStyle = '#666666';
+                        const location = course.location || '';
+                        ctx.fillText('📍 ' + (location.length > 8 ? location.substring(0, 7) + '…' : location), x + 6, y + 30);
+
+                        const timeStr = course.time_slots?.display || times[slot];
+                        ctx.fillText('⏰ ' + timeStr, x + 6, y + 44);
+
+                        if (hasConflict) {
+                            ctx.fillStyle = colors.conflict;
+                            ctx.fillText(`⚠️ +${conflicts.length}门冲突`, x + 6, y + height - 6);
+                        }
+                    } else {
+                        // 空单元格
+                        const x = padding + timeColWidth + di * cellWidth;
+                        const y = padding + 30 + headerHeight + (slot - 1) * cellHeight;
+                        ctx.strokeStyle = colors.border;
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(x, y, cellWidth, cellHeight);
+                    }
+                });
+            }
+
+            // 底部提示
+            ctx.fillStyle = '#999999';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('长按图片保存', canvasWidth / 2, canvasHeight - 8);
+
+            // 显示图片
+            showCaptureModal(canvas);
+        }
+
+        function showCaptureModal(canvas) {
+            const modal = document.createElement('div');
+            modal.id = 'capture-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px';
+
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+            img.style.cssText = 'max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+
+            const hint = document.createElement('div');
+            hint.style.cssText = 'position:absolute;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.95);padding:10px 20px;border-radius:6px;font-size:14px;color:#333';
+            hint.textContent = '长按图片保存';
+
+            modal.appendChild(img);
+            modal.appendChild(hint);
+
+            modal.addEventListener('click', e => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+
+            document.body.appendChild(modal);
+        }
+
 
         const _params = new URLSearchParams(window.location.search);
         adminViewUser = _params.get('as') || null;
@@ -347,10 +564,9 @@
         // 处理分享码进入
         async function tryShareCode() {
             if (!_shareCode) return false;
-            const resp = await fetch('/api/share/enter', {
+            const resp = await safeFetch('/api/share/enter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({ token: _shareCode }),
             });
             const result = await resp.json();
@@ -483,7 +699,7 @@
         function handleExit() {
             sessionStorage.removeItem('import_data');
             if (adminViewMode) { location.href = '/admin.html'; return; }
-            if (!importMode) fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            if (!importMode) safeFetch('/api/logout', { method: 'POST' });
             window.location.href = '/login.html';
         }
 
@@ -587,6 +803,7 @@
                     w.style.display = 'none';
                 }
 
+                window._lastCoursesData = data;  // 保存数据供截图使用
                 renderCourses(data);
             } catch (e) {
                 document.getElementById('timetable').innerHTML =
@@ -687,12 +904,21 @@
                         const hasConflict = uniqueCourses.length > 1;
                         const conflictMark = hasConflict ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
 
+                        // 检查是否显示课程时间
+                        const showTime = (() => {
+                            try {
+                                return localStorage.getItem('schedule_show_course_time') !== '0';
+                            } catch (_) {
+                                return true;
+                            }
+                        })();
+
                         table.innerHTML += `
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
                                 <div class="course" data-key="${esc(key)}" style="${hasConflict ? 'border-left-color:#ff4d4f;' : ''}">
                                     <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
                                     <div class="course-info">📍 ${esc(course.location)}</div>
-                                    <div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>
+                                    ${showTime ? `<div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>` : ''}
                                     <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
                                     ${hasConflict ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${uniqueCourses.length - 1}门冲突</div>` : ''}
                                 </div>
@@ -780,6 +1006,5 @@
     <script>
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </body>
 </html>

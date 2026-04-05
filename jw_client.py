@@ -13,7 +13,12 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
 BASE_URL = "http://59.57.242.167:81/njwhd"
-AES_KEY  = b"qzkj1kjghd=876&*"
+
+# 外部系统加密密钥（通过环境变量配置，如果未设置则使用默认值）
+# 注意：此密钥用于与教务系统 API 交互，非本地加密使用
+# 生产环境强烈建议设置环境变量 JW_API_KEY
+_jw_api_key_raw = os.environ.get('JW_API_KEY', 'qzkj1kjghd=876&*')
+AES_KEY = _jw_api_key_raw.encode()[:16]
 
 # 本地存储加密使用独立密钥（必须通过环境变量设置，未设置则启动失败）
 _storage_key_raw = os.environ.get('STORAGE_AES_KEY')

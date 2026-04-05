@@ -7,6 +7,20 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1890ff">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('schedule_theme_color');
+                if (saved) {
+                    var theme = JSON.parse(saved);
+                    var root = document.documentElement;
+                    root.style.setProperty('--c-primary', theme.primary);
+                    root.style.setProperty('--c-accent', theme.accent);
+                    root.style.setProperty('--c-course', theme.course);
+                }
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/style.css">
     <style>
         body { padding: 20px; }
@@ -109,6 +123,23 @@
             gap: 12px;
         }
         .advanced-summary { font-size: 0.78rem; color: var(--c-muted); }
+        /* ── 班级分组 ── */
+        .class-group { margin-bottom: 12px; }
+        .class-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--c-subtle);
+            border: 1px solid var(--c-border-soft);
+            border-radius: 6px; cursor: pointer;
+            font-size: 0.9rem; font-weight: 500;
+            transition: background 0.15s;
+        }
+        .class-header:hover { background: var(--c-hover); }
+        .class-header .arrow { font-size: 0.8rem; color: var(--c-muted); transition: transform 0.2s; }
+        .class-header.open .arrow { transform: rotate(180deg); }
+        .class-users { display: none; padding-top: 8px; }
+        .class-users.open { display: block; }
+        .class-count { font-size: 0.78rem; color: var(--c-muted); font-weight: normal; }
     </style>
 </head>
 <body>
@@ -135,34 +166,6 @@
             <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
             <div id="cache-clear-status" style="font-size:0.82rem;color:#52c41a;margin-top:8px;display:none"></div>
 
-            <!-- 日历订阅 -->
-            <div id="ics-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft);display:none">
-                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅</div>
-                <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
-
-                <div id="ics-content">
-                    <div id="ics-no-subscription">
-                        <button class="btn btn-primary" onclick="createIcsSubscription()">生成订阅链接</button>
-                        <div class="hint" style="margin-top:8px">
-                            生成ICS订阅链接后，你可以将其导入到Google日历、Apple日历、Outlook等第三方日历应用中，随时查看课表。
-                        </div>
-                    </div>
-
-                    <div id="ics-has-subscription" style="display:none">
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-                            <input type="text" id="ics-url" readonly style="flex:1;min-width:200px;padding:8px;font-size:0.85rem;border:1px solid var(--c-border-input);border-radius:6px;background:var(--c-subtle)">
-                            <button class="btn btn-default" onclick="copyIcsUrl()">复制链接</button>
-                            <button class="btn btn-default btn-danger" onclick="revokeIcsSubscription()">撤销订阅</button>
-                        </div>
-                        <div class="hint">
-                            订阅创建时间：<span id="ics-created-at"></span>
-                            <br>
-                            <strong>使用说明：</strong>将上述链接添加到日历应用的「订阅」或「添加外部日历」功能中即可。各平台会自动同步课表更新。
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
                 <span>
                     <strong>高级选项</strong>
@@ -186,9 +189,51 @@
                             <option value="a4">A4 (595 x 842)</option>
                         </select>
                     </div>
+                    <div class="field" style="margin:0">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked style="width:auto">
+                            <span>显示课程时间</span>
+                        </label>
+                        <div class="hint" style="margin-top:4px">在课程卡片下方显示上课时间</div>
+                    </div>
                 </div>
-                <div class="hint">截图会按所选尺寸临时渲染当前课表页面并下载，设置仅保存在当前浏览器。</div>
+                <div class="hint">截图和显示设置仅保存在当前浏览器。</div>
+
+                <!-- 主题色 -->
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
+                    <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">主题色</div>
+                    <div id="theme-colors" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+                </div>
+
                 <div class="save-status" id="advanced-save-status" style="margin-top:10px">✓ 已保存</div>
+
+                <!-- 日历订阅 -->
+                <div id="ics-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft);display:none">
+                    <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅</div>
+                    <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
+
+                    <div id="ics-content">
+                        <div id="ics-no-subscription">
+                            <button class="btn btn-primary" onclick="createIcsSubscription()">生成订阅链接</button>
+                            <div class="hint" style="margin-top:8px">
+                                生成ICS订阅链接后，你可以将其导入到Google日历、Apple日历、Outlook等第三方日历应用中，随时查看课表。
+                            </div>
+                        </div>
+
+                        <div id="ics-has-subscription" style="display:none">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                                <input type="text" id="ics-url" readonly style="flex:1;min-width:200px;padding:8px;font-size:0.85rem;border:1px solid var(--c-border-input);border-radius:6px;background:var(--c-subtle)">
+                                <button class="btn btn-default" onclick="copyIcsUrl()">复制链接</button>
+                                <button class="btn btn-default btn-danger" onclick="revokeIcsSubscription()">撤销订阅</button>
+                            </div>
+                            <div class="hint">
+                                订阅创建时间：<span id="ics-created-at"></span>
+                                <br>
+                                <strong>使用说明：</strong>将上述链接添加到日历应用的「订阅」或「添加外部日历」功能中即可。各平台会自动同步课表更新。
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -253,23 +298,55 @@
                 <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
                 <div class="hint">地点包含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多个标识用英文逗号分隔，如 <code>教2,实2</code>。留空则不启用。</div>
             </div>
-            <div class="field">
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                    <input type="checkbox" id="ics_enabled" disabled style="width:auto">
-                    <span>允许普通用户使用日历订阅</span>
-                </label>
-                <div class="hint">开启后，普通用户可以生成ICS订阅链接，导入到第三方日历应用（如Google日历、Apple日历）中查看课表。</div>
-            </div>
             <div class="actions">
                 <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
                 <span class="save-status" id="admin-save-status">✓ 已保存</span>
                 <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
             </div>
 
+            <!-- 日历订阅权限 -->
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
+                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅权限</div>
+                <div class="field" style="margin-bottom:0">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <input type="checkbox" id="ics_enabled" disabled style="width:auto">
+                        <span>允许普通用户使用日历订阅</span>
+                    </label>
+                    <div class="hint">开启后，普通用户可以在高级选项中生成ICS订阅链接，导入到第三方日历应用中查看课表。</div>
+                </div>
+            </div>
+
             <!-- 分享码管理 -->
             <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
                 <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">分享码管理</div>
                 <div id="admin-share-list">加载中...</div>
+            </div>
+        </div>
+
+        <!-- ── 用户组管理（管理员）── -->
+        <div class="card" id="groups-card" style="display:none">
+            <div class="card-header">
+                <h2>用户组管理</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div style="font-size:0.8rem;color:var(--c-muted);margin-bottom:12px">将用户分组并授予不同权限。未分组的用户使用默认组权限。</div>
+
+            <!-- 默认组设置 -->
+            <div class="field">
+                <label>新用户默认组</label>
+                <select id="default-group-select" onchange="saveDefaultGroup()" disabled>
+                    <option value="">加载中...</option>
+                </select>
+                <div class="hint">新注册用户将自动加入此组。</div>
+            </div>
+
+            <!-- 用户组列表 -->
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                    <span style="font-size:0.88rem;font-weight:500">用户组列表</span>
+                    <button class="btn btn-primary" onclick="showGroupEditModal()" style="padding:4px 12px;font-size:0.82rem">+ 新建组</button>
+                </div>
+                <div id="groups-list">加载中...</div>
             </div>
         </div>
 
@@ -292,6 +369,58 @@
         const BUTTON_MODE_KEY = 'schedule_button_mode';
         const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
         const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
+        const SHOW_COURSE_TIME_KEY = 'schedule_show_course_time';
+        const THEME_COLOR_KEY = 'schedule_theme_color';
+
+        const THEME_COLORS = [
+            { name: '默认蓝', primary: '#1890ff', accent: '#1890ff', course: '#e6f7ff' },
+            { name: '青色', primary: '#00b96b', accent: '#00b96b', course: '#e6fff0' },
+            { name: '紫色', primary: '#722ed1', accent: '#722ed1', course: '#f0e6ff' },
+            { name: '橙色', primary: '#fa8c16', accent: '#fa8c16', course: '#fff4e6' },
+            { name: '粉色', primary: '#eb2f96', accent: '#eb2f96', course: '#ffe6f0' },
+            { name: '深蓝', primary: '#2f54eb', accent: '#2f54eb', course: '#e6f0ff' },
+            { name: '青绿', primary: '#13c2c2', accent: '#13c2c2', course: '#e6ffff' },
+            { name: '金色', primary: '#d4b106', accent: '#d4b106', course: '#fffbe6' },
+        ];
+
+        // ── CSRF Token 管理 ───────────────────────────────────────────────────────
+        let _csrfToken = null;
+
+        async function getCsrfToken() {
+            if (!_csrfToken) {
+                try {
+                    const resp = await fetch('/api/csrf-token', { credentials: 'include' });
+                    const data = await resp.json();
+                    _csrfToken = data.csrf_token;
+                } catch (e) {
+                    console.error('Failed to fetch CSRF token:', e);
+                }
+            }
+            return _csrfToken;
+        }
+
+        // 安全的 fetch 包装函数，自动添加 CSRF token
+        async function safeFetch(url, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+
+            // GET, HEAD, OPTIONS 不需要 CSRF token
+            if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+                return fetch(url, options);
+            }
+
+            // 获取 CSRF token
+            const csrfToken = await getCsrfToken();
+            if (!csrfToken) {
+                throw new Error('无法获取安全令牌，请刷新页面重试');
+            }
+
+            // 添加 CSRF token 到请求头
+            options.headers = options.headers || {};
+            options.headers['X-CSRF-Token'] = csrfToken;
+            options.credentials = options.credentials || 'include';
+
+            return fetch(url, options);
+        }
 
         function esc(s) {
             return String(s ?? '')
@@ -341,16 +470,52 @@
         function loadAdvancedOptions() {
             const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
             const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
+            const showTime = readLocalPreference(SHOW_COURSE_TIME_KEY, '1');
             document.getElementById('home-button-mode').value = mode;
             document.getElementById('capture-size-preset').value = preset;
+            document.getElementById('show-course-time').checked = showTime === '1';
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
+            loadThemeColors();
+        }
+
+        function loadThemeColors() {
+            const container = document.getElementById('theme-colors');
+            const saved = readLocalPreference(THEME_COLOR_KEY, '');
+
+            container.innerHTML = THEME_COLORS.map((t, i) => {
+                const isSelected = saved ? (JSON.parse(saved).primary === t.primary) : (i === 0);
+                return `<div class="theme-color-item ${isSelected ? 'selected' : ''}"
+                             style="background:${t.primary};width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid ${isSelected ? t.primary : 'transparent'};box-shadow:${isSelected ? `0 0 0 2px var(--c-surface), 0 0 0 4px ${t.primary}` : 'none'};transition:all 0.2s"
+                             onclick="selectThemeColor(${i})"
+                             title="${t.name}">
+                            ${isSelected ? '<span style="color:white;font-size:14px;line-height:26px">✓</span>' : ''}
+                        </div>`;
+            }).join('');
+        }
+
+        function selectThemeColor(index) {
+            const theme = THEME_COLORS[index];
+            writeLocalPreference(THEME_COLOR_KEY, JSON.stringify(theme));
+            applyThemeColor(theme);
+            loadThemeColors();
+        }
+
+        function applyThemeColor(theme) {
+            const root = document.documentElement;
+            root.style.setProperty('--c-primary', theme.primary);
+            root.style.setProperty('--c-accent', theme.accent);
+            root.style.setProperty('--c-course', theme.course);
+            // 更新meta标签
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.primary);
         }
 
         function saveAdvancedOptions() {
             const mode = document.getElementById('home-button-mode').value;
             const preset = document.getElementById('capture-size-preset').value;
+            const showTime = document.getElementById('show-course-time').checked ? '1' : '0';
             writeLocalPreference(BUTTON_MODE_KEY, mode);
             writeLocalPreference(CAPTURE_PRESET_KEY, preset);
+            writeLocalPreference(SHOW_COURSE_TIME_KEY, showTime);
             showAdvancedSaveStatus();
         }
 
@@ -373,12 +538,14 @@
 
             if (isAdmin) {
                 document.getElementById('admin-card').style.display = 'block';
+                document.getElementById('groups-card').style.display = 'block';
                 document.getElementById('users-card').style.display = 'block';
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('slot34_special_pattern').disabled = false;
                 document.getElementById('ics_enabled').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
+                loadGroups();
                 loadAdminShares();
                 loadUsers();
             }
@@ -405,10 +572,9 @@
             const btn = document.getElementById('save-admin-btn');
             btn.disabled = true; btn.textContent = '保存中...';
             try {
-                const resp = await fetch('/api/settings', {
+                const resp = await safeFetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
                     body: JSON.stringify({ fetch_interval: val, slot34_special_pattern: pattern, ics_enabled: icsEnabled }),
                 });
                 const data = await resp.json();
@@ -426,8 +592,8 @@
             const btn = document.getElementById('force-fetch-btn');
             btn.disabled = true; btn.textContent = '抓取中…';
             try {
-                const resp = await fetch('/api/admin/force_fetch', {
-                    method: 'POST', credentials: 'include',
+                const resp = await safeFetch('/api/admin/force_fetch', {
+                    method: 'POST',
                 });
                 const data = await resp.json();
                 alert(data.message || (data.error ? `失败：${data.error}` : '已触发'));
@@ -456,7 +622,7 @@
         }
 
         async function doLogout() {
-            await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+            await safeFetch('/api/logout', { method: 'POST' });
             location.href = '/login.html';
         }
 
@@ -581,10 +747,9 @@
             if (isNaN(wFrom) || isNaN(wTo) || wFrom < 1 || wTo > 30 || wFrom > wTo) {
                 alert('请检查周次范围（1~30，起始不能大于结束）'); return;
             }
-            const resp = await fetch('/api/share/create', {
+            const resp = await safeFetch('/api/share/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({
                     expires_in: document.getElementById('share-expires').value,
                     week_from: wFrom, week_to: wTo,
@@ -614,10 +779,9 @@
 
         async function revokeShare(token) {
             if (!confirm(`确认撤销分享码 ${token}？`)) return;
-            await fetch('/api/share/revoke', {
+            await safeFetch('/api/share/revoke', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({ token }),
             });
             loadShares();
@@ -638,27 +802,282 @@
                 el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无用户</div>';
                 return;
             }
-            el.innerHTML = adminUsersList.map((u, i) => {
-                const chips = u.cached_weeks.map(w =>
-                    `<button class="week-chip" onclick="viewUserWeek(${i}, ${w})">第${w}周</button>`
-                ).join('');
-                const loginStr = u.last_login ? new Date(u.last_login).toLocaleDateString() : '未知';
-                return `<div class="user-row">
-                    <div class="user-row-head">
-                        <span><strong>${esc(u.name)}</strong>
-                            <span style="color:#999;font-size:0.85rem"> · ${esc(u.username)}</span>
-                            <span style="color:#aaa;font-size:0.8rem"> · ${esc(u.class_name)}</span>
-                        </span>
-                        <span style="color:#aaa;font-size:0.78rem">最近登录 ${loginStr}</span>
+
+            // 按班级分组
+            const classGroups = {};
+            adminUsersList.forEach((u, i) => {
+                const cls = u.class_name || '未知班级';
+                if (!classGroups[cls]) classGroups[cls] = [];
+                classGroups[cls].push({ ...u, _index: i });
+            });
+
+            // 按班级名排序
+            const sortedClasses = Object.keys(classGroups).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+
+            el.innerHTML = sortedClasses.map(cls => {
+                const users = classGroups[cls];
+                const classId = 'class-' + cls.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
+                const usersHtml = users.map(u => {
+                    const chips = u.cached_weeks.map(w =>
+                        `<button class="week-chip" onclick="viewUserWeek(${u._index}, ${w})">第${w}周</button>`
+                    ).join('');
+                    const loginStr = u.last_login ? new Date(u.last_login).toLocaleDateString() : '未知';
+                    const groupLabel = u.group_name ? `<span style="color:var(--c-primary);font-size:0.75rem;margin-left:4px" class="user-group-tag" data-username="${esc(u.username)}">[${esc(u.group_name)}]</span>` : '';
+                    return `<div class="user-row">
+                        <div class="user-row-head">
+                            <span><strong>${esc(u.name)}</strong>
+                                <span style="color:#999;font-size:0.85rem"> · ${esc(u.username)}</span>
+                                ${groupLabel}
+                            </span>
+                            <span>
+                                <button class="btn btn-default" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})" style="padding:2px 6px;font-size:0.72rem">设置组</button>
+                                <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近登录 ${loginStr}</span>
+                            </span>
+                        </div>
+                        <div class="week-chips">${chips || '<span style="color:#aaa;font-size:0.8rem">无缓存数据</span>'}</div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="class-group">
+                    <div class="class-header" onclick="toggleClassGroup('${classId}')">
+                        <span>${esc(cls)} <span class="class-count">(${users.length}人)</span></span>
+                        <span class="arrow" id="${classId}-arrow">▾</span>
                     </div>
-                    <div class="week-chips">${chips || '<span style="color:#aaa;font-size:0.8rem">无缓存数据</span>'}</div>
+                    <div class="class-users" id="${classId}">${usersHtml}</div>
                 </div>`;
             }).join('');
+        }
+
+        function toggleClassGroup(classId) {
+            const el = document.getElementById(classId);
+            const arrow = document.getElementById(classId + '-arrow');
+            const header = el.previousElementSibling;
+            if (el.classList.contains('open')) {
+                el.classList.remove('open');
+                header.classList.remove('open');
+                arrow.textContent = '▾';
+            } else {
+                el.classList.add('open');
+                header.classList.add('open');
+                arrow.textContent = '▴';
+            }
         }
 
         function viewUserWeek(userIdx, week) {
             const u = adminUsersList[userIdx];
             location.href = `/?as=${encodeURIComponent(u.username)}&week=${week}`;
+        }
+
+        // ── 用户组管理 ─────────────────────────────────────────────────────────────
+        let adminGroupsList = [];
+
+        async function loadGroups() {
+            const resp = await fetch('/api/admin/groups', { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            adminGroupsList = data.groups || [];
+
+            // 更新用户组列表
+            const el = document.getElementById('groups-list');
+            el.innerHTML = adminGroupsList.map(g => `
+                <div class="token-row" style="justify-content:space-between">
+                    <span>
+                        <strong>${esc(g.name)}</strong>
+                        <span style="color:var(--c-muted);font-size:0.78rem;margin-left:8px">
+                            ${g.can_use_ics ? '✓ 日历订阅' : '✗ 日历订阅'}
+                            · ${g.can_create_share ? '✓ 分享码' : '✗ 分享码'}
+                        </span>
+                    </span>
+                    <span>
+                        <button class="btn btn-default" onclick="showGroupEditModal(${g.id})" style="padding:2px 8px;font-size:0.78rem">编辑</button>
+                        ${g.id > 2 ? `<button class="btn btn-default btn-danger" onclick="deleteGroup(${g.id})" style="padding:2px 8px;font-size:0.78rem;margin-left:4px">删除</button>` : ''}
+                    </span>
+                </div>
+            `).join('');
+
+            // 更新默认组选择器
+            await loadDefaultGroup();
+        }
+
+        async function loadDefaultGroup() {
+            const resp = await fetch('/api/admin/settings/default_group', { credentials: 'include' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const select = document.getElementById('default-group-select');
+            select.innerHTML = adminGroupsList.map(g =>
+                `<option value="${g.id}" ${g.id === data.default_group_id ? 'selected' : ''}>${esc(g.name)}</option>`
+            ).join('');
+            select.disabled = false;
+        }
+
+        async function saveDefaultGroup() {
+            const groupId = document.getElementById('default-group-select').value;
+            await safeFetch('/api/admin/settings/default_group', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ default_group_id: parseInt(groupId) }),
+            });
+        }
+
+        let editingGroupId = null;
+
+        function showGroupEditModal(groupId = null) {
+            editingGroupId = groupId;
+            const group = groupId ? adminGroupsList.find(g => g.id === groupId) : null;
+
+            const modal = document.createElement('div');
+            modal.id = 'group-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+            modal.innerHTML = `
+                <div style="background:var(--c-surface);padding:20px;border-radius:8px;max-width:400px;width:90%">
+                    <h3 style="margin:0 0 16px">${group ? '编辑用户组' : '新建用户组'}</h3>
+                    <div class="field">
+                        <label>组名</label>
+                        <input type="text" id="group-name" value="${group ? esc(group.name) : ''}" placeholder="输入组名">
+                    </div>
+                    <div class="field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="group-can-use-ics" ${!group || group.can_use_ics ? 'checked' : ''} style="width:auto">
+                            <span>允许使用日历订阅</span>
+                        </label>
+                    </div>
+                    <div class="field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="group-can-create-share" ${!group || group.can_create_share ? 'checked' : ''} style="width:auto">
+                            <span>允许创建分享码</span>
+                        </label>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+                        <button class="btn btn-default" onclick="closeGroupModal()">取消</button>
+                        <button class="btn btn-primary" onclick="saveGroup()">保存</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', e => { if (e.target === modal) closeGroupModal(); });
+        }
+
+        function closeGroupModal() {
+            const modal = document.getElementById('group-modal');
+            if (modal) modal.remove();
+        }
+
+        async function saveGroup() {
+            const name = document.getElementById('group-name').value.trim();
+            if (!name) {
+                alert('请输入组名');
+                return;
+            }
+
+            const data = {
+                name,
+                can_use_ics: document.getElementById('group-can-use-ics').checked,
+                can_create_share: document.getElementById('group-can-create-share').checked,
+            };
+
+            try {
+                const url = editingGroupId
+                    ? `/api/admin/groups/${editingGroupId}`
+                    : '/api/admin/groups';
+                const method = editingGroupId ? 'PUT' : 'POST';
+
+                const resp = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(data),
+                });
+
+                const result = await resp.json();
+                if (!resp.ok) {
+                    alert(result.error || '保存失败');
+                    return;
+                }
+
+                closeGroupModal();
+                await loadGroups();
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
+        }
+
+        async function deleteGroup(groupId) {
+            if (!confirm('确定删除此用户组？组内用户将移至默认组。')) return;
+
+            try {
+                const resp = await fetch(`/api/admin/groups/${groupId}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+
+                const result = await resp.json();
+                if (!resp.ok) {
+                    alert(result.error || '删除失败');
+                    return;
+                }
+
+                await loadGroups();
+            } catch (err) {
+                alert('删除失败: ' + err.message);
+            }
+        }
+
+        function showUserGroupModal(username, currentGroupId) {
+            const options = adminGroupsList.map(g =>
+                `<option value="${g.id}" ${g.id === currentGroupId ? 'selected' : ''}>${esc(g.name)}</option>`
+            ).join('');
+
+            const modal = document.createElement('div');
+            modal.id = 'user-group-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000';
+            modal.innerHTML = `
+                <div style="background:var(--c-surface);padding:20px;border-radius:8px;max-width:350px;width:90%">
+                    <h3 style="margin:0 0 16px">设置用户组</h3>
+                    <div style="font-size:0.85rem;color:var(--c-muted);margin-bottom:12px">用户: ${esc(username)}</div>
+                    <div class="field" style="margin-bottom:16px">
+                        <select id="user-group-select">
+                            <option value="">未分组</option>
+                            ${options}
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end">
+                        <button class="btn btn-default" onclick="closeUserGroupModal()">取消</button>
+                        <button class="btn btn-primary" onclick="saveUserGroup('${esc(username)}')">保存</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', e => { if (e.target === modal) closeUserGroupModal(); });
+        }
+
+        function closeUserGroupModal() {
+            const modal = document.getElementById('user-group-modal');
+            if (modal) modal.remove();
+        }
+
+        async function saveUserGroup(username) {
+            const select = document.getElementById('user-group-select');
+            const groupId = select.value ? parseInt(select.value) : null;
+
+            try {
+                const resp = await fetch(`/api/admin/users/${encodeURIComponent(username)}/group`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ group_id: groupId }),
+                });
+
+                const result = await resp.json();
+                if (!resp.ok) {
+                    alert(result.error || '保存失败');
+                    return;
+                }
+
+                closeUserGroupModal();
+                await loadUsers();
+            } catch (err) {
+                alert('保存失败: ' + err.message);
+            }
         }
 
         // ── 日历订阅 ─────────────────────────────────────────────────────────────
@@ -702,9 +1121,8 @@
             btn.textContent = '生成中...';
 
             try {
-                const resp = await fetch('/api/ics/create', {
-                    method: 'POST',
-                    credentials: 'include'
+                const resp = await safeFetch('/api/ics/create', {
+                    method: 'POST'
                 });
                 const data = await resp.json();
 
@@ -733,9 +1151,8 @@
             if (!confirm('确认撤销日历订阅？撤销后，已导入的日历将不再更新。')) return;
 
             try {
-                const resp = await fetch('/api/ics/revoke', {
-                    method: 'POST',
-                    credentials: 'include'
+                const resp = await safeFetch('/api/ics/revoke', {
+                    method: 'POST'
                 });
                 const data = await resp.json();
 

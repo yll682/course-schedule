@@ -1,14 +1,41 @@
 version: '3.8'
+
 services:
   course-schedule:
     build: .
-    ports:
-      - "5000:5000"
-    volumes:
-      - db_data:/app          # 持久化数据库和日志
-    env_file:
-      - .env                  # 从 .env 文件读取环境变量
+    image: course-schedule:latest
+    container_name: course-schedule
     restart: unless-stopped
 
+    ports:
+      - "${PORT:-5000}:5000"
+
+    environment:
+      # 从 .env 文件读取
+      - STORAGE_AES_KEY=${STORAGE_AES_KEY}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - JW_API_KEY=${JW_API_KEY:-}
+      - ADMIN_USERS=${ADMIN_USERS:-}
+      - FLASK_DEBUG=${FLASK_DEBUG:-false}
+      - DB_FILE=/app/data/courses.db
+
+    volumes:
+      # 持久化数据库和密钥文件
+      - course-data:/app/data
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
-  db_data:
+  course-data:
+    driver: local

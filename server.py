@@ -5,14 +5,47 @@ import secrets
 import sqlite3
 import threading
 import time as time_module
+import re
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from functools import wraps
 
-from flask import Flask, request, jsonify, session, send_from_directory
+from flask import Flask, request, jsonify, session, send_from_directory, g
 from flask_cors import CORS
+from werkzeug.exceptions import BadRequest
+from werkzeug.security import safe_join
 
 import jw_client
+
+# ── CSRF 保护 ──────────────────────────────────────────────────────────────────
+def generate_csrf_token():
+    """生成 CSRF token 并存储在 session 中"""
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+def validate_csrf_token(token):
+    """验证 CSRF token"""
+    return token and token == session.get('_csrf_token')
+
+def csrf_protected(f):
+    """CSRF 保护装饰器"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # GET, HEAD, OPTIONS 不需要 CSRF 保护
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return f(*args, **kwargs)
+
+        # 从请求头或请求体获取 CSRF token
+        token = request.headers.get('X-CSRF-Token') or (request.json or {}).get('_csrf_token')
+
+        if not validate_csrf_token(token):
+            logger.warning(f'CSRF 验证失败: {request.remote_addr} {request.path}')
+            return jsonify({'success': False, 'message': '安全验证失败,请刷新页面重试'}), 403
+
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ── 全局锁 ────────────────────────────────────────────────────────────────────
 _token_refresh_locks = {}  # username -> Lock
@@ -24,6 +57,26 @@ def _get_user_lock(username: str) -> threading.Lock:
         if username not in _token_refresh_locks:
             _token_refresh_locks[username] = threading.Lock()
         return _token_refresh_locks[username]
+
+# ── 输入验证 ──────────────────────────────────────────────────────────────────
+def validate_week(week: int) -> bool:
+    """验证周次"""
+    return isinstance(week, int) and 0 <= week <= 30
+
+def sanitize_string(s: str, max_length: int = 1000) -> str:
+    """清理字符串输入"""
+    if not isinstance(s, str):
+        return ''
+    # 移除控制字符
+    s = ''.join(char for char in s if ord(char) >= 32 or char in '\n\r\t')
+    return s[:max_length].strip()
+
+def validate_share_token(token: str) -> bool:
+    """验证分享码格式"""
+    if not token or not isinstance(token, str):
+        return False
+    # 分享码应该是大写字母和数字的组合，长度 8-20
+    return bool(re.match(r'^[A-Z0-9]{8,20}$', token.upper()))
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -67,6 +120,29 @@ def set_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # 添加 Content-Security-Policy
+    # 注意：这是一个严格的 CSP 策略，只允许同源资源
+    # 如果需要加载外部资源，需要根据实际情况调整
+    csp_policy = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "  # unsafe-inline 用于内联脚本，如果可能应该使用 nonce
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self';"
+    )
+    response.headers['Content-Security-Policy'] = csp_policy
+
+    # 添加 Referrer-Policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # 添加 Permissions-Policy
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+
     return response
 
 # ── 登录频率限制（5次/分钟/IP） ────────────────────────────────────────────────
@@ -134,6 +210,24 @@ def init_db():
                      (token TEXT PRIMARY KEY, username TEXT NOT NULL,
                       created_at TEXT NOT NULL, revoked INTEGER DEFAULT 0)''')
         c.execute('CREATE INDEX IF NOT EXISTS idx_ics_username ON ics_tokens(username)')
+        # 用户组表
+        c.execute('''CREATE TABLE IF NOT EXISTS user_groups
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+                      can_use_ics INTEGER DEFAULT 1, can_create_share INTEGER DEFAULT 1,
+                      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)''')
+        # 用户表中添加组ID列
+        try:
+            c.execute('ALTER TABLE users ADD COLUMN group_id INTEGER')
+        except sqlite3.OperationalError as e:
+            if 'duplicate column name' not in str(e).lower():
+                logger.warning('数据库迁移警告: %s', e)
+        # 创建默认用户组（如果不存在）
+        c.execute('SELECT COUNT(*) FROM user_groups')
+        if c.fetchone()[0] == 0:
+            c.execute('''INSERT INTO user_groups (name, can_use_ics, can_create_share)
+                         VALUES ('默认组', 1, 1)''')
+            c.execute('''INSERT INTO user_groups (name, can_use_ics, can_create_share)
+                         VALUES ('受限组', 0, 0)''')
         for col_def in [
             'jw_token TEXT', 'token_time TEXT', 'jw_name TEXT',
             'jw_class TEXT', 'jw_kbjcmsid TEXT', 'password_enc TEXT',
@@ -320,11 +414,26 @@ def index():
 
 @app.route('/<path:path>')
 def static_files(path):
+    # 防止路径遍历攻击：验证路径不会跳出根目录
+    safe_path = safe_join('.', path)
+    if not safe_path:
+        logger.warning(f'路径遍历尝试被拦截: {request.remote_addr} {path}')
+        return jsonify({'error': 'Not found'}), 404
+
+    # 额外的黑名单检查（深度防御）
     filename = path.rsplit('/', 1)[-1]
     ext = os.path.splitext(filename)[1].lower()
     if filename in _BLOCKED or ext in _BLOCKED_EXTS:
         return jsonify({'error': 'Not found'}), 404
-    return send_from_directory('.', path)
+
+    return send_from_directory('.', safe_path)
+
+
+# ── CSRF Token API ─────────────────────────────────────────────────────────────
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    """获取 CSRF token"""
+    return jsonify({'csrf_token': generate_csrf_token()})
 
 
 @app.route('/api/login', methods=['POST'])
@@ -337,6 +446,7 @@ def login():
     username = data.get('username', '').strip()
     password = data.get('password', '')
 
+    # 基础验证
     if not username or not password:
         return jsonify({'success': False, 'message': '请输入学号和密码'}), 401
 
@@ -365,26 +475,35 @@ def login():
                  password_enc, username),
             )
         else:
+            default_group_id = _get_default_group_id()
             c.execute(
                 'INSERT INTO users (username, password_hash, last_login, jw_token, token_time, '
-                'jw_name, jw_class, password_enc) VALUES (?, "", ?, ?, ?, ?, ?, ?)',
+                'jw_name, jw_class, password_enc, group_id) VALUES (?, "", ?, ?, ?, ?, ?, ?, ?)',
                 (username, now, token, now,
                  user_info.get('name', ''), user_info.get('clsName', ''),
-                 password_enc),
+                 password_enc, default_group_id),
             )
         conn.commit()
 
+    # 安全关键：登录成功后重新生成 session ID，防止 session 固定攻击
+    session.clear()
     session.permanent = True
     session['username'] = username
     session['is_admin']  = username in ADMIN_USERS
+
+    # 生成新的 CSRF token
+    csrf_token = generate_csrf_token()
+
     return jsonify({
-        'success':  True,
-        'is_admin': username in ADMIN_USERS,
-        'name':     user_info.get('name', username),
+        'success':     True,
+        'is_admin':    username in ADMIN_USERS,
+        'name':        user_info.get('name', username),
+        'csrf_token':  csrf_token,
     })
 
 
 @app.route('/api/logout', methods=['POST'])
+@csrf_protected
 def logout():
     session.clear()
     return jsonify({'success': True})
@@ -562,6 +681,11 @@ def settings():
     is_admin = session.get('is_admin', False)
 
     if request.method == 'POST':
+        # CSRF 保护
+        token = request.headers.get('X-CSRF-Token') or (request.json or {}).get('_csrf_token')
+        if not validate_csrf_token(token):
+            return jsonify({'success': False, 'message': '安全验证失败'}), 403
+
         data = request.json or {}
         # fetch_interval：管理员专属，需校验范围
         if 'fetch_interval' in data and is_admin:
@@ -623,6 +747,10 @@ def share_verify():
     if not token:
         return jsonify({'valid': False, 'message': '请输入分享码'}), 400
 
+    # 验证分享码格式
+    if not validate_share_token(token):
+        return jsonify({'valid': False, 'message': '分享码格式无效'}), 400
+
     with _db() as conn:
         c = conn.cursor()
         c.execute('SELECT owner, expires_at, week_from, week_to, revoked '
@@ -656,6 +784,7 @@ def share_verify():
 
 
 @app.route('/api/share/enter', methods=['POST'])
+@csrf_protected
 def share_enter():
     """用分享码进入只读浏览模式（无需账号密码）"""
     ip = request.remote_addr
@@ -701,13 +830,20 @@ def share_enter():
 
 
 @app.route('/api/share/create', methods=['POST'])
+@csrf_protected
 def share_create():
     """创建分享码（仅限已登录的正式用户）"""
     if 'username' not in session:
         return jsonify({'error': '未登录'}), 401
 
-    data     = request.json or {}
     username = session['username']
+    is_admin = session.get('is_admin', False)
+
+    # 检查是否有权限创建分享码
+    if not _can_create_share(username, is_admin):
+        return jsonify({'error': '您没有创建分享码的权限'}), 403
+
+    data     = request.json or {}
 
     days = {'1d': 1, '7d': 7, '30d': 30, '180d': 180}.get(
         data.get('expires_in', '7d'), 7)
@@ -793,6 +929,7 @@ def share_list():
 
 
 @app.route('/api/share/revoke', methods=['POST'])
+@csrf_protected
 def share_revoke():
     """撤销分享码；管理员可撤销任意码"""
     if 'username' not in session:
@@ -824,7 +961,9 @@ def admin_list_users():
 
     with _db() as conn:
         c = conn.cursor()
-        c.execute('SELECT username, jw_name, jw_class, last_login FROM users ORDER BY last_login DESC')
+        c.execute('''SELECT u.username, u.jw_name, u.jw_class, u.last_login, u.group_id, g.name
+                     FROM users u LEFT JOIN user_groups g ON u.group_id = g.id
+                     ORDER BY u.last_login DESC''')
         users = c.fetchall()
         result = []
         for u in users:
@@ -836,8 +975,169 @@ def admin_list_users():
                 'class_name':   u[2] or '',
                 'last_login':   u[3] or '',
                 'cached_weeks': cached_weeks,
+                'group_id':     u[4],
+                'group_name':   u[5] or '',
             })
     return jsonify({'users': result})
+
+
+# ── 用户组管理 ────────────────────────────────────────────────────────────────
+
+@app.route('/api/admin/groups', methods=['GET'])
+def admin_list_groups():
+    """获取所有用户组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id, name, can_use_ics, can_create_share FROM user_groups ORDER BY id')
+        groups = c.fetchall()
+        result = [{
+            'id': g[0],
+            'name': g[1],
+            'can_use_ics': bool(g[2]),
+            'can_create_share': bool(g[3]),
+        } for g in groups]
+    return jsonify({'groups': result})
+
+
+@app.route('/api/admin/groups', methods=['POST'])
+@csrf_protected
+def admin_create_group():
+    """创建用户组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': '组名不能为空'}), 400
+
+    can_use_ics = 1 if data.get('can_use_ics', True) else 0
+    can_create_share = 1 if data.get('can_create_share', True) else 0
+
+    try:
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute('INSERT INTO user_groups (name, can_use_ics, can_create_share) VALUES (?, ?, ?)',
+                      (name, can_use_ics, can_create_share))
+            conn.commit()
+            group_id = c.lastrowid
+        return jsonify({'success': True, 'id': group_id, 'name': name,
+                        'can_use_ics': bool(can_use_ics), 'can_create_share': bool(can_create_share)})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': '组名已存在'}), 400
+
+
+@app.route('/api/admin/groups/<int:group_id>', methods=['PUT'])
+@csrf_protected
+def admin_update_group(group_id):
+    """修改用户组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    data = request.get_json() or {}
+    updates = []
+    params = []
+
+    if 'name' in data:
+        updates.append('name = ?')
+        params.append(data['name'].strip())
+    if 'can_use_ics' in data:
+        updates.append('can_use_ics = ?')
+        params.append(1 if data['can_use_ics'] else 0)
+    if 'can_create_share' in data:
+        updates.append('can_create_share = ?')
+        params.append(1 if data['can_create_share'] else 0)
+
+    if not updates:
+        return jsonify({'error': '无更新内容'}), 400
+
+    params.append(group_id)
+    try:
+        with _db() as conn:
+            c = conn.cursor()
+            c.execute(f'UPDATE user_groups SET {", ".join(updates)} WHERE id = ?', params)
+            conn.commit()
+            if c.rowcount == 0:
+                return jsonify({'error': '用户组不存在'}), 404
+        return jsonify({'success': True})
+    except sqlite3.IntegrityError:
+        return jsonify({'error': '组名已存在'}), 400
+
+
+@app.route('/api/admin/groups/<int:group_id>', methods=['DELETE'])
+@csrf_protected
+def admin_delete_group(group_id):
+    """删除用户组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    # 不允许删除默认组（ID 1或2）
+    if group_id <= 2:
+        return jsonify({'error': '不能删除系统默认组'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        # 将该组的用户移至默认组
+        default_id = _get_default_group_id()
+        c.execute('UPDATE users SET group_id = ? WHERE group_id = ?', (default_id, group_id))
+        c.execute('DELETE FROM user_groups WHERE id = ?', (group_id,))
+        conn.commit()
+        if c.rowcount == 0:
+            return jsonify({'error': '用户组不存在'}), 404
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/users/<string:username>/group', methods=['PUT'])
+@csrf_protected
+def admin_set_user_group(username):
+    """设置用户所属组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    data = request.get_json() or {}
+    group_id = data.get('group_id')
+
+    with _db() as conn:
+        c = conn.cursor()
+        if group_id is None:
+            c.execute('UPDATE users SET group_id = NULL WHERE username = ?', (username,))
+        else:
+            c.execute('SELECT id FROM user_groups WHERE id = ?', (group_id,))
+            if not c.fetchone():
+                return jsonify({'error': '用户组不存在'}), 404
+            c.execute('UPDATE users SET group_id = ? WHERE username = ?', (group_id, username))
+        conn.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/settings/default_group', methods=['GET', 'PUT'])
+def admin_default_group():
+    """获取或设置默认用户组"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    if request.method == 'GET':
+        default_id = _get_default_group_id()
+        return jsonify({'default_group_id': default_id})
+
+    data = request.get_json() or {}
+    group_id = data.get('default_group_id')
+    if group_id is None:
+        return jsonify({'error': '缺少 default_group_id'}), 400
+
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id FROM user_groups WHERE id = ?', (group_id,))
+        if not c.fetchone():
+            return jsonify({'error': '用户组不存在'}), 404
+        c.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+                  ('default_group_id', str(group_id)))
+        conn.commit()
+    return jsonify({'success': True})
+
 
 
 @app.route('/api/admin/view/<string:target_user>/<int:week>', methods=['GET'])
@@ -859,6 +1159,7 @@ def admin_view(target_user, week):
 
 
 @app.route('/api/admin/force_fetch', methods=['POST'])
+@csrf_protected
 def admin_force_fetch():
     """管理员触发立即为所有用户抓取课表（后台执行，失败保留缓存）"""
     if 'username' not in session or not session.get('is_admin'):
@@ -907,11 +1208,62 @@ def admin_force_fetch():
 
 # ── ICS 日历订阅 ────────────────────────────────────────────────────────────────
 
+def _get_user_group(username: str) -> dict | None:
+    """获取用户所属的用户组信息"""
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT group_id FROM users WHERE username=?', (username,))
+        row = c.fetchone()
+        if not row or not row[0]:
+            return None
+        c.execute('SELECT id, name, can_use_ics, can_create_share FROM user_groups WHERE id=?', (row[0],))
+        group = c.fetchone()
+        if not group:
+            return None
+        return {
+            'id': group[0],
+            'name': group[1],
+            'can_use_ics': bool(group[2]),
+            'can_create_share': bool(group[3]),
+        }
+
+def _get_default_group_id() -> int:
+    """获取默认用户组ID"""
+    # 优先从设置中获取
+    default_id = get_setting('default_group_id', None)
+    if default_id:
+        try:
+            return int(default_id)
+        except (ValueError, TypeError):
+            pass
+    # 否则返回第一个组
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT id FROM user_groups ORDER BY id LIMIT 1')
+        row = c.fetchone()
+        return row[0] if row else 1
+
 def _can_use_ics(username: str, is_admin: bool) -> bool:
     """检查用户是否可以使用ICS订阅"""
     if is_admin:
         return True
+    # 先检查用户所属组
+    group = _get_user_group(username)
+    if group:
+        return group['can_use_ics']
+    # 未分组的用户使用全局设置
     return get_setting('ics_enabled', 'false').lower() == 'true'
+
+def _can_create_share(username: str, is_admin: bool) -> bool:
+    """检查用户是否可以创建分享码"""
+    if is_admin:
+        return True
+    # 先检查用户所属组
+    group = _get_user_group(username)
+    if group:
+        return group['can_create_share']
+    # 未分组的用户默认可以创建
+    return True
 
 
 def _get_slot_time_range(start_slot: int, duration: int, location: str = '') -> tuple:
@@ -1118,6 +1470,7 @@ def _generate_empty_ics() -> str:
 
 
 @app.route('/api/ics/create', methods=['POST'])
+@csrf_protected
 def ics_create():
     """创建ICS订阅"""
     if 'username' not in session:
@@ -1247,6 +1600,7 @@ def ics_status():
 
 
 @app.route('/api/ics/revoke', methods=['POST'])
+@csrf_protected
 def ics_revoke():
     """撤销ICS订阅"""
     if 'username' not in session:

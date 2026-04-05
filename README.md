@@ -22,6 +22,8 @@
 
 ## 🚀 部署
 
+### 方式一：传统部署（推荐）
+
 **要求：** Debian / Ubuntu，root 权限
 
 国际线路：
@@ -54,6 +56,75 @@ bash <(curl -fsSL https://edgeone.gh-proxy.org/https://raw.githubusercontent.com
 
 安装完成后通过反向代理（Nginx / Caddy 等）将流量转发到 `127.0.0.1:<端口>` 对外暴露。
 
+### 方式二：Docker 部署
+
+**要求：** Docker 和 Docker Compose
+
+#### 快速部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/yll682/course-schedule.git
+cd course-schedule
+
+# 2. 运行部署脚本
+chmod +x docker-deploy.sh
+./docker-deploy.sh
+```
+
+部署脚本会自动：
+- 复制 `.env.example` 为 `.env`
+- 生成随机密钥
+- 构建并启动 Docker 容器
+
+#### 手动部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/yll682/course-schedule.git
+cd course-schedule
+
+# 2. 创建配置文件
+cp .env.example .env
+
+# 3. 编辑 .env 文件，设置必需的环境变量
+# 必须设置: STORAGE_AES_KEY
+nano .env
+
+# 4. 构建并启动
+docker-compose up -d --build
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+#### Docker 常用命令
+
+```bash
+# 查看运行状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+
+# 重启服务
+docker-compose restart
+
+# 停止服务
+docker-compose down
+
+# 更新部署
+git pull
+docker-compose up -d --build
+
+# 进入容器调试
+docker-compose exec course-schedule /bin/bash
+```
+
+#### Docker 环境变量
+
+Docker 部署时的环境变量通过 `.env` 文件配置，与传统部署相同。数据库会自动持久化到 Docker volume `course-data`。
+
 ## ⚙️ 配置
 
 **管理员学号**：安装时填写，或事后修改 `server.py`：
@@ -68,10 +139,18 @@ ADMIN_USERS = ['你的学号']
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
+| `STORAGE_AES_KEY` | **必需**，本地密码加密密钥（16字节hex） | — |
 | `SECRET_KEY` | Flask Session 密钥，自动生成 | — |
+| `JW_API_KEY` | 教务系统API加密密钥 | 默认值（无需修改） |
+| `ADMIN_USERS` | 管理员学号（逗号分隔） | — |
 | `PORT` | 监听端口 | 安装时填写 |
 | `FLASK_DEBUG` | 开发模式 | false |
 | `DB_FILE` | 数据库路径 | `/opt/course-schedule/courses.db` |
+
+**重要**：`STORAGE_AES_KEY` 必须在首次运行前设置，可使用以下命令生成：
+```bash
+python -c "import secrets; print(secrets.token_hex(16))"
+```
 
 ## 🗂️ 项目结构
 
@@ -90,9 +169,12 @@ ADMIN_USERS = ['你的学号']
 
 ## 🔒 安全说明
 
-- 用户密码 AES 加密后存入本地 SQLite，不以明文保存
-- Session 使用 HttpOnly + SameSite=Lax Cookie
-- 登录接口频率限制：5 次/分钟/IP
-- 静态路由屏蔽 `.py`、`.db`、`.env` 等敏感扩展名
-- Gunicorn 仅监听 `127.0.0.1`，不直接对外暴露
-- `*.db`、`.env` 已加入 `.gitignore`
+- **CSRF 保护**：所有 POST/PUT/DELETE 请求均需 CSRF token，防止跨站请求伪造攻击
+- **Session 安全**：登录后重新生成 Session ID，防止 Session 固定攻击
+- **密码加密**：用户密码使用 AES-GCM 加密后存入本地 SQLite，不以明文保存
+- **Session Cookie**：使用 HttpOnly + SameSite=Lax + Secure（生产环境）
+- **Content-Security-Policy**：严格的 CSP 策略，防止 XSS 攻击
+- **频率限制**：登录接口 5 次/分钟/IP，防止暴力破解
+- **静态文件保护**：屏蔽 `.py`、`.db`、`.env` 等敏感扩展名
+- **仅本地监听**：Gunicorn 仅监听 `127.0.0.1`，不直接对外暴露
+- **敏感文件**：`*.db`、`.env` 已加入 `.gitignore`
