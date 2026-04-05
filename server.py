@@ -976,6 +976,7 @@ def admin_list_users():
                 'cached_weeks': cached_weeks,
                 'group_id':     u[5],
                 'group_name':   u[6] or '',
+                'is_admin':     u[0] in ADMIN_USERS,  # 标记是否为管理员
             })
     return jsonify({'users': result})
 

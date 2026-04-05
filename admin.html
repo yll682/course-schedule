@@ -822,14 +822,18 @@
                     ).join('');
                     const loginStr = formatLoginTime(u.last_active);
                     const groupLabel = u.group_name ? `<span style="color:var(--c-primary);font-size:0.75rem;margin-left:4px" class="user-group-tag" data-username="${esc(u.username)}">[${esc(u.group_name)}]</span>` : '';
+                    const adminLabel = u.is_admin ? '<span style="color:#cf1322;font-size:0.75rem;margin-left:4px">[管理员]</span>' : '';
+                    const groupBtn = u.is_admin
+                        ? ''
+                        : `<button class="btn btn-default" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})" style="padding:2px 6px;font-size:0.72rem">设置组</button>`;
                     return `<div class="user-row">
                         <div class="user-row-head">
                             <span><strong>${esc(u.name)}</strong>
                                 <span style="color:#999;font-size:0.85rem"> · ${esc(u.username)}</span>
-                                ${groupLabel}
+                                ${groupLabel}${adminLabel}
                             </span>
                             <span>
-                                <button class="btn btn-default" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})" style="padding:2px 6px;font-size:0.72rem">设置组</button>
+                                ${groupBtn}
                                 <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近活跃 ${loginStr}</span>
                             </span>
                         </div>
