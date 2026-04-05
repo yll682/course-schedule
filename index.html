@@ -244,11 +244,8 @@
         let importWeeksMap = {};
         let slot34SpecialPattern = '';
         const BUTTON_MODE_KEY = 'schedule_button_mode';
-        const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
         let headerButtonMode = 'back_to_week';
-        let captureSizePreset = 'device';
         const CAPTURE_PRESETS = {
-            device: { label: '当前设备' },
             a4: { label: 'A4', width: 595, minHeight: 842 },
         };
 
@@ -280,13 +277,11 @@
 
         function loadHeaderPreferences() {
             const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
-            const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
             headerButtonMode = mode === 'capture' ? 'capture' : 'back_to_week';
-            captureSizePreset = CAPTURE_PRESETS[preset] ? preset : 'device';
         }
 
         function getCapturePreset() {
-            return CAPTURE_PRESETS[captureSizePreset] || CAPTURE_PRESETS.device;
+            return CAPTURE_PRESETS.a4;
         }
 
         function getCaptureFileName() {
@@ -299,10 +294,9 @@
         }
 
         function setHeaderButtonCaptureMode(btn) {
-            const preset = getCapturePreset();
             btn.classList.add('capture-mode');
             btn.textContent = '📷';
-            btn.title = `截图（${preset.label}）`;
+            btn.title = '截图（A4）';
             btn.setAttribute('aria-label', btn.title);
             btn.style.display = '';
         }
@@ -393,8 +387,7 @@
                 subtle: getColor('--c-subtle', '#f0f0f0'),
             };
 
-            // 尺寸配置
-            const preset = getCapturePreset();
+            // 尺寸配置 - 固定使用A4尺寸
             const headerHeight = 50;
             const timeColWidth = 70;
             const padding = 20;
@@ -402,26 +395,14 @@
             const slots = 10;
             const separatorHeight = 3;  // 分隔线高度
 
-            let canvasWidth, canvasHeight, cellWidth, cellHeight;
-
-            if (preset.width && preset.minHeight) {
-                // A4 或自定义尺寸 - 计算填满整个页面的尺寸
-                canvasWidth = preset.width;
-                canvasHeight = preset.minHeight;
-
-                const availableWidth = canvasWidth - padding * 2;
-                const availableHeight = canvasHeight - padding * 2 - 50; // 预留顶部标题和底部提示
-
-                cellWidth = Math.floor((availableWidth - timeColWidth) / days);
-                // 根据 A4 高度反推 cellHeight，填满整个页面
-                cellHeight = Math.floor((availableHeight - headerHeight - 2 * separatorHeight) / slots);
-            } else {
-                // 当前设备
-                cellWidth = 100;
-                cellHeight = 60;
-                canvasWidth = timeColWidth + days * cellWidth + padding * 2;
-                canvasHeight = headerHeight + slots * cellHeight + 2 * separatorHeight + padding * 2 + 50;
-            }
+            // A4 尺寸 (595 x 842)
+            const canvasWidth = 595;
+            const canvasHeight = 842;
+            const availableWidth = canvasWidth - padding * 2;
+            const availableHeight = canvasHeight - padding * 2 - 50; // 预留顶部标题和底部提示
+            const cellWidth = Math.floor((availableWidth - timeColWidth) / days);
+            // 根据 A4 高度反推 cellHeight，填满整个页面
+            const cellHeight = Math.floor((availableHeight - headerHeight - 2 * separatorHeight) / slots);
 
             const canvas = document.createElement('canvas');
             // 使用设备像素比提高清晰度

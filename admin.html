@@ -169,7 +169,7 @@
             <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
                 <span>
                     <strong>高级选项</strong>
-                    <span class="advanced-summary">配置首页左上角按钮和截图尺寸</span>
+                    <span class="advanced-summary">配置首页左上角按钮和显示设置</span>
                 </span>
                 <span id="advanced-toggle-icon">▾</span>
             </button>
@@ -180,13 +180,6 @@
                         <select id="home-button-mode" onchange="saveAdvancedOptions()">
                             <option value="back_to_week">回本周</option>
                             <option value="capture">截图</option>
-                        </select>
-                    </div>
-                    <div class="field" style="margin:0">
-                        <label for="capture-size-preset">截图尺寸</label>
-                        <select id="capture-size-preset" onchange="saveAdvancedOptions()">
-                            <option value="device">当前设备</option>
-                            <option value="a4">A4 (595 x 842)</option>
                         </select>
                     </div>
                     <div class="field" style="margin:0">
@@ -363,7 +356,6 @@
         let maxWeekForExport = 20;
         let adminUsersList = [];
         const BUTTON_MODE_KEY = 'schedule_button_mode';
-        const CAPTURE_PRESET_KEY = 'schedule_capture_preset';
         const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
         const SHOW_COURSE_TIME_KEY = 'schedule_show_course_time';
         const SHOW_COURSE_LOCATION_KEY = 'schedule_show_course_location';
@@ -486,11 +478,9 @@
 
         function loadAdvancedOptions() {
             const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
-            const preset = readLocalPreference(CAPTURE_PRESET_KEY, 'device');
             const showTime = readLocalPreference(SHOW_COURSE_TIME_KEY, '1');
             const showLocation = readLocalPreference(SHOW_COURSE_LOCATION_KEY, '1');
             document.getElementById('home-button-mode').value = mode;
-            document.getElementById('capture-size-preset').value = preset;
             document.getElementById('show-course-time').checked = showTime === '1';
             document.getElementById('show-course-location').checked = showLocation === '1';
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
@@ -530,11 +520,9 @@
 
         function saveAdvancedOptions() {
             const mode = document.getElementById('home-button-mode').value;
-            const preset = document.getElementById('capture-size-preset').value;
             const showTime = document.getElementById('show-course-time').checked ? '1' : '0';
             const showLocation = document.getElementById('show-course-location').checked ? '1' : '0';
             writeLocalPreference(BUTTON_MODE_KEY, mode);
-            writeLocalPreference(CAPTURE_PRESET_KEY, preset);
             writeLocalPreference(SHOW_COURSE_TIME_KEY, showTime);
             writeLocalPreference(SHOW_COURSE_LOCATION_KEY, showLocation);
             showAdvancedSaveStatus();
