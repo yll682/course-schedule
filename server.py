@@ -104,7 +104,8 @@ app.secret_key = _secret
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=os.environ.get('FLASK_DEBUG', 'false').lower() != 'true',
+    # 默认要求 HTTPS，除非明确设置 ALLOW_HTTP=true（仅用于本地开发）
+    SESSION_COOKIE_SECURE=os.environ.get('ALLOW_HTTP', 'false').lower() != 'true',
     SESSION_COOKIE_PERMANENT=True,
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 限制请求大小为 16MB
