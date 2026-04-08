@@ -99,7 +99,7 @@
         }
         .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.66rem, 1.8vw, 0.78rem); height: 100%; overflow: hidden; }
         .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
-        .course-info { opacity: 0.8; font-size: clamp(0.60rem, 1.6vw, 0.68rem); line-height: 1.4; }
+        .course-info { opacity: 0.8; font-size: clamp(0.60rem, 1.6vw, 0.68rem); line-height: 1.4; word-wrap: break-word; }
         .course { cursor: pointer; }
         .course:active { filter: brightness(0.93); }
         @media (max-width: 768px) {
@@ -514,6 +514,15 @@
                 }
             })();
 
+            // 检查是否显示emoji
+            const showEmoji = (() => {
+                try {
+                    return localStorage.getItem('schedule_show_emoji') !== '0';
+                } catch (_) {
+                    return true;
+                }
+            })();
+
             // 绘制表头背景
             ctx.fillStyle = colors.primary;
             ctx.fillRect(padding, padding + 30, canvasWidth - padding * 2, headerHeight);
@@ -647,17 +656,27 @@
                         // 地点
                         const location = course.location || '';
                         if (location) {
-                            const locationText = '📍 ' + location;
-                            const textWidth = ctx.measureText(locationText).width;
+                            if (showEmoji) {
+                                const locationText = '📍 ' + location;
+                                const textWidth = ctx.measureText(locationText).width;
 
-                            // 如果一行能放下，就不换行
-                            if (textWidth <= maxWidth) {
-                                ctx.fillText(locationText, x + margin + 6, textY);
-                                textY += infoLineHeight + 2;
+                                // 如果一行能放下，就不换行
+                                if (textWidth <= maxWidth) {
+                                    ctx.fillText(locationText, x + margin + 6, textY);
+                                    textY += infoLineHeight + 2;
+                                } else {
+                                    // 一行放不下，emoji单独一行
+                                    ctx.fillText('📍', x + margin + 6, textY);
+                                    textY += infoLineHeight;
+                                    const locLines = wrapText(ctx, location, maxWidth);
+                                    const locLinesToShow = locLines.slice(0, 2);
+                                    locLinesToShow.forEach((line, idx) => {
+                                        ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                    });
+                                    textY += (locLinesToShow.length > 0 ? locLinesToShow.length : 1) * infoLineHeight + 2;
+                                }
                             } else {
-                                // 一行放不下，emoji单独一行
-                                ctx.fillText('📍', x + margin + 6, textY);
-                                textY += infoLineHeight;
+                                // 不显示emoji，直接显示文本
                                 const locLines = wrapText(ctx, location, maxWidth);
                                 const locLinesToShow = locLines.slice(0, 2);
                                 locLinesToShow.forEach((line, idx) => {
@@ -671,17 +690,28 @@
                         if (showTime) {
                             const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                             const timeStr = courseTime || course.time_slots?.display || times[slot];
-                            const timeText = '⏰ ' + timeStr;
-                            const textWidth = ctx.measureText(timeText).width;
 
-                            // 如果一行能放下，就不换行
-                            if (textWidth <= maxWidth) {
-                                ctx.fillText(timeText, x + margin + 6, textY);
-                                textY += infoLineHeight + 2;
+                            if (showEmoji) {
+                                const timeText = '⏰ ' + timeStr;
+                                const textWidth = ctx.measureText(timeText).width;
+
+                                // 如果一行能放下，就不换行
+                                if (textWidth <= maxWidth) {
+                                    ctx.fillText(timeText, x + margin + 6, textY);
+                                    textY += infoLineHeight + 2;
+                                } else {
+                                    // 一行放不下，emoji单独一行
+                                    ctx.fillText('⏰', x + margin + 6, textY);
+                                    textY += infoLineHeight;
+                                    const timeLines = wrapText(ctx, timeStr, maxWidth);
+                                    const timeLinesToShow = timeLines.slice(0, 2);
+                                    timeLinesToShow.forEach((line, idx) => {
+                                        ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                    });
+                                    textY += (timeLinesToShow.length > 0 ? timeLinesToShow.length : 1) * infoLineHeight + 2;
+                                }
                             } else {
-                                // 一行放不下，emoji单独一行
-                                ctx.fillText('⏰', x + margin + 6, textY);
-                                textY += infoLineHeight;
+                                // 不显示emoji，直接显示文本
                                 const timeLines = wrapText(ctx, timeStr, maxWidth);
                                 const timeLinesToShow = timeLines.slice(0, 2);
                                 timeLinesToShow.forEach((line, idx) => {
@@ -694,13 +724,23 @@
                         // 教师（最多2行）
                         const teacher = course.teacher || '';
                         if (teacher) {
-                            const teacherText = '👨‍🏫 ' + teacher;
-                            const teacherLines = wrapText(ctx, teacherText, maxWidth);
-                            const teacherLinesToShow = teacherLines.slice(0, 2);
-                            teacherLinesToShow.forEach((line, idx) => {
-                                ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
-                            });
-                            textY += teacherLinesToShow.length * infoLineHeight + 2;
+                            if (showEmoji) {
+                                const teacherText = '👨‍🏫 ' + teacher;
+                                const teacherLines = wrapText(ctx, teacherText, maxWidth);
+                                const teacherLinesToShow = teacherLines.slice(0, 2);
+                                teacherLinesToShow.forEach((line, idx) => {
+                                    ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                });
+                                textY += teacherLinesToShow.length * infoLineHeight + 2;
+                            } else {
+                                // 不显示emoji，直接显示文本
+                                const teacherLines = wrapText(ctx, teacher, maxWidth);
+                                const teacherLinesToShow = teacherLines.slice(0, 2);
+                                teacherLinesToShow.forEach((line, idx) => {
+                                    ctx.fillText(line, x + margin + 6, textY + idx * infoLineHeight);
+                                });
+                                textY += teacherLinesToShow.length * infoLineHeight + 2;
+                            }
                         }
 
                         if (hasConflict) {
@@ -1233,14 +1273,100 @@
                                 return true;
                             }
                         })();
+                        const showEmoji = (() => {
+                            try {
+                                return localStorage.getItem('schedule_show_emoji') !== '0';
+                            } catch (_) {
+                                return true;
+                            }
+                        })();
+
+                        // 测量文本宽度的辅助函数
+                        const measureTextWidth = (text) => {
+                            // 创建临时元素测量宽度
+                            const span = document.createElement('span');
+                            span.style.cssText = `
+                                position: absolute;
+                                visibility: hidden;
+                                white-space: nowrap;
+                                font-size: clamp(0.60rem, 1.6vw, 0.68rem);
+                                font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                            `;
+                            span.textContent = text;
+                            document.body.appendChild(span);
+                            const width = span.offsetWidth;
+                            document.body.removeChild(span);
+                            return width;
+                        };
+
+                        // 获取课程卡片可用宽度
+                        const getAvailableWidth = () => {
+                            const cell = document.querySelector('.cell');
+                            if (cell) {
+                                // 减去padding和边框
+                                return cell.offsetWidth - 12 - 6; // 左右padding(6px) + 左边框(3px) + 额外空间
+                            }
+                            // 默认宽度（手机屏幕估算）
+                            return window.innerWidth < 768 ? 60 : 100;
+                        };
+
+                        const availableWidth = getAvailableWidth();
+
+                        // 地点显示逻辑
+                        const locationText = course.location || '';
+                        const locationHtml = showLocation && locationText ? (() => {
+                            if (showEmoji) {
+                                const textWithEmoji = '📍 ' + locationText;
+                                const textWidth = measureTextWidth(textWithEmoji);
+                                if (textWidth > availableWidth) {
+                                    // 文本过长：emoji单独一行，文本自动换行
+                                    return `<div class="course-info">📍<br/>${esc(locationText)}</div>`;
+                                } else {
+                                    // 文本不长：emoji和文本在同一行
+                                    return `<div class="course-info">📍 ${esc(locationText)}</div>`;
+                                }
+                            } else {
+                                // 不显示emoji，只显示文本
+                                return `<div class="course-info">${esc(locationText)}</div>`;
+                            }
+                        })() : '';
+
+                        // 时间显示逻辑
+                        const timeDisplayText = courseTime || course.time_slots.display;
+                        const timeHtml = showTime ? (() => {
+                            if (showEmoji) {
+                                const textWithEmoji = '⏰ ' + timeDisplayText;
+                                const textWidth = measureTextWidth(textWithEmoji);
+                                if (textWidth > availableWidth) {
+                                    // 文本过长：emoji单独一行，文本自动换行
+                                    return `<div class="course-info">⏰<br/>${esc(timeDisplayText)}</div>`;
+                                } else {
+                                    // 文本不长：emoji和文本在同一行
+                                    return `<div class="course-info">⏰ ${esc(timeDisplayText)}</div>`;
+                                }
+                            } else {
+                                // 不显示emoji，只显示文本
+                                return `<div class="course-info">${esc(timeDisplayText)}</div>`;
+                            }
+                        })() : '';
+
+                        // 教师显示逻辑
+                        const teacherText = course.teacher || '';
+                        const teacherHtml = teacherText ? (() => {
+                            if (showEmoji) {
+                                return `<div class="course-info">👨‍🏫 ${esc(teacherText)}</div>`;
+                            } else {
+                                return `<div class="course-info">${esc(teacherText)}</div>`;
+                            }
+                        })() : '';
 
                         table.innerHTML += `
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
                                 <div class="course" data-key="${esc(key)}" style="${hasConflict ? 'border-left-color:#ff4d4f;' : ''}">
                                     <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
-                                    ${showLocation ? `<div class="course-info">📍 ${esc(course.location)}</div>` : ''}
-                                    ${showTime ? `<div class="course-info">⏰ ${esc(courseTime || course.time_slots.display)}</div>` : ''}
-                                    <div class="course-info">👨‍🏫 ${esc(course.teacher)}</div>
+                                    ${locationHtml}
+                                    ${timeHtml}
+                                    ${teacherHtml}
                                     ${hasConflict ? `<div class="course-info" style="color:#ff4d4f;font-weight:bold">+${uniqueCourses.length - 1}门冲突</div>` : ''}
                                 </div>
                             </div>`;

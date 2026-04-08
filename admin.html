@@ -194,6 +194,10 @@
                             <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
                             <span style="font-size:0.88rem">显示上课地点</span>
                         </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
+                            <span style="font-size:0.88rem">显示 Emoji 图标</span>
+                        </label>
                     </div>
                 </div>
 
@@ -364,6 +368,7 @@
         const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
         const SHOW_COURSE_TIME_KEY = 'schedule_show_course_time';
         const SHOW_COURSE_LOCATION_KEY = 'schedule_show_course_location';
+        const SHOW_EMOJI_KEY = 'schedule_show_emoji';
         const THEME_COLOR_KEY = 'schedule_theme_color';
 
         const THEME_COLORS = [
@@ -517,9 +522,11 @@
             const mode = readLocalPreference(BUTTON_MODE_KEY, 'back_to_week');
             const showTime = readLocalPreference(SHOW_COURSE_TIME_KEY, '1');
             const showLocation = readLocalPreference(SHOW_COURSE_LOCATION_KEY, '1');
+            const showEmoji = readLocalPreference(SHOW_EMOJI_KEY, '1');
             document.getElementById('home-button-mode').value = mode;
             document.getElementById('show-course-time').checked = showTime === '1';
             document.getElementById('show-course-location').checked = showLocation === '1';
+            document.getElementById('show-emoji').checked = showEmoji === '1';
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
             loadThemeColors();
         }
@@ -564,9 +571,11 @@
             const mode = document.getElementById('home-button-mode').value;
             const showTime = document.getElementById('show-course-time').checked ? '1' : '0';
             const showLocation = document.getElementById('show-course-location').checked ? '1' : '0';
+            const showEmoji = document.getElementById('show-emoji').checked ? '1' : '0';
             writeLocalPreference(BUTTON_MODE_KEY, mode);
             writeLocalPreference(SHOW_COURSE_TIME_KEY, showTime);
             writeLocalPreference(SHOW_COURSE_LOCATION_KEY, showLocation);
+            writeLocalPreference(SHOW_EMOJI_KEY, showEmoji);
             showAdvancedSaveStatus();
         }
 
