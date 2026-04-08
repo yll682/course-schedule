@@ -1281,39 +1281,6 @@
                             }
                         })();
 
-                        // 动态计算最优字号的函数
-                        const calculateOptimalFontSize = (text, availableWidth, showEmoji, emojiChar = '') => {
-                            // 字号范围（单位：rem）
-                            const minSize = 0.5;   // 最小字号（约8px），小字号可读性极限
-                            const maxSize = 0.68;  // 最大字号（约11px），舒适阅读
-                            const sizeStep = 0.02; // 每次调整的步长
-
-                            // 从最大字号开始尝试
-                            for (let size = maxSize; size >= minSize; size -= sizeStep) {
-                                const span = document.createElement('span');
-                                span.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${size}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                // 如果显示emoji，测量emoji+文本的宽度
-                                span.textContent = showEmoji && emojiChar ? `${emojiChar} ${text}` : text;
-                                document.body.appendChild(span);
-                                const width = span.offsetWidth;
-                                document.body.removeChild(span);
-
-                                // 如果当前字号能放下，返回这个字号
-                                if (width <= availableWidth) {
-                                    return size;
-                                }
-                            }
-
-                            // 如果最小字号都放不下，返回最小字号
-                            return minSize;
-                        };
-
                         // 获取课程卡片可用宽度
                         const getAvailableWidth = () => {
                             // 尝试找到一个课程单元格（非表头、非时间列）
@@ -1340,52 +1307,28 @@
                         // 地点显示逻辑
                         const locationText = course.location || '';
                         const locationHtml = showLocation && locationText ? (() => {
-                            if (showEmoji) {
-                                // 先测量在最大字号下emoji+文本的宽度
-                                const maxSize = 0.68;
-                                const minSize = 0.5;
-                                const tempSpan = document.createElement('span');
-                                tempSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${maxSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                tempSpan.textContent = '📍 ' + locationText;
-                                document.body.appendChild(tempSpan);
-                                const maxWidthTextWidth = tempSpan.offsetWidth;
-                                document.body.removeChild(tempSpan);
+                            // 测量地点文本宽度（使用默认字号）
+                            const measureSpan = document.createElement('span');
+                            measureSpan.style.cssText = `
+                                position: absolute;
+                                visibility: hidden;
+                                white-space: nowrap;
+                                font-size: 0.62rem;
+                                font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                            `;
+                            const fullText = showEmoji ? `📍 ${locationText}` : locationText;
+                            measureSpan.textContent = fullText;
+                            document.body.appendChild(measureSpan);
+                            const textWidth = measureSpan.offsetWidth;
+                            document.body.removeChild(measureSpan);
 
-                                // 计算最优字号
-                                const optimalSize = calculateOptimalFontSize(locationText, availableWidth, showEmoji, '📍');
-
-                                // 判断是否应该在同一行：
-                                // 检查在最小字号下是否能放下（如果最小字号能放下，说明可以通过缩小字号来适配）
-                                const minSpan = document.createElement('span');
-                                minSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${minSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                minSpan.textContent = '📍 ' + locationText;
-                                document.body.appendChild(minSpan);
-                                const minWidthTextWidth = minSpan.offsetWidth;
-                                document.body.removeChild(minSpan);
-
-                                if (minWidthTextWidth <= availableWidth) {
-                                    // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">📍 ${esc(locationText)}</div>`;
-                                } else {
-                                    // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
-                                    return `<div class="course-info" style="font-size:${minSize}rem">📍<br/>${esc(locationText)}</div>`;
-                                }
+                            // 判断是否需要换行
+                            if (textWidth <= availableWidth) {
+                                // 能放下，一行显示
+                                return `<div class="course-info" style="white-space:nowrap">${showEmoji ? '📍 ' : ''}${esc(locationText)}</div>`;
                             } else {
-                                // 不显示emoji，只显示文本
-                                const optimalSize = calculateOptimalFontSize(locationText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(locationText)}</div>`;
+                                // 放不下，自动换行（保持默认字号）
+                                return `<div class="course-info">${showEmoji ? '📍 ' : ''}${esc(locationText)}</div>`;
                             }
                         })() : '';
 
@@ -1421,52 +1364,28 @@
                         // 教师显示逻辑
                         const teacherText = course.teacher || '';
                         const teacherHtml = teacherText ? (() => {
-                            if (showEmoji) {
-                                // 先测量在最大字号下emoji+文本的宽度
-                                const maxSize = 0.68;
-                                const minSize = 0.5;
-                                const tempSpan = document.createElement('span');
-                                tempSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${maxSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                tempSpan.textContent = '👨‍🏫 ' + teacherText;
-                                document.body.appendChild(tempSpan);
-                                const maxWidthTextWidth = tempSpan.offsetWidth;
-                                document.body.removeChild(tempSpan);
+                            // 测量教师文本宽度（使用默认字号）
+                            const measureSpan = document.createElement('span');
+                            measureSpan.style.cssText = `
+                                position: absolute;
+                                visibility: hidden;
+                                white-space: nowrap;
+                                font-size: 0.62rem;
+                                font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                            `;
+                            const fullText = showEmoji ? `👨‍🏫 ${teacherText}` : teacherText;
+                            measureSpan.textContent = fullText;
+                            document.body.appendChild(measureSpan);
+                            const textWidth = measureSpan.offsetWidth;
+                            document.body.removeChild(measureSpan);
 
-                                // 计算最优字号
-                                const optimalSize = calculateOptimalFontSize(teacherText, availableWidth, showEmoji, '👨‍🏫');
-
-                                // 判断是否应该在同一行：
-                                // 检查在最小字号下是否能放下
-                                const minSpan = document.createElement('span');
-                                minSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${minSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                minSpan.textContent = '👨‍🏫 ' + teacherText;
-                                document.body.appendChild(minSpan);
-                                const minWidthTextWidth = minSpan.offsetWidth;
-                                document.body.removeChild(minSpan);
-
-                                if (minWidthTextWidth <= availableWidth) {
-                                    // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">👨‍🏫 ${esc(teacherText)}</div>`;
-                                } else {
-                                    // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
-                                    return `<div class="course-info" style="font-size:${minSize}rem">👨‍🏫<br/>${esc(teacherText)}</div>`;
-                                }
+                            // 判断是否需要换行
+                            if (textWidth <= availableWidth) {
+                                // 能放下，一行显示
+                                return `<div class="course-info" style="white-space:nowrap">${showEmoji ? '👨‍🏫 ' : ''}${esc(teacherText)}</div>`;
                             } else {
-                                // 不显示emoji，只显示文本
-                                const optimalSize = calculateOptimalFontSize(teacherText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(teacherText)}</div>`;
+                                // 放不下，自动换行（保持默认字号）
+                                return `<div class="course-info">${showEmoji ? '👨‍🏫 ' : ''}${esc(teacherText)}</div>`;
                             }
                         })() : '';
 
