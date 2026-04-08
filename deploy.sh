@@ -116,6 +116,7 @@ do_uninstall() {
     systemctl stop  "$SERVICE_NAME" 2>/dev/null || true
     systemctl disable "$SERVICE_NAME" 2>/dev/null || true
     rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    rm -f "/etc/sudoers.d/${SERVICE_NAME}-restart"
     systemctl daemon-reload
 
     info "删除应用目录 $APP_DIR..."
@@ -242,6 +243,12 @@ setup_systemd() {
     chmod 755 "$APP_DIR"
     # .env 也由 courseapp 读取
     chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
+
+    # 配置 sudoers 允许 courseapp 重启服务
+    local sudoers_file="/etc/sudoers.d/${SERVICE_NAME}-restart"
+    echo "${APP_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ${SERVICE_NAME}" > "$sudoers_file"
+    chmod 440 "$sudoers_file"
+
     systemctl daemon-reload
     systemctl enable --quiet "$SERVICE_NAME"
     systemctl restart "$SERVICE_NAME"

@@ -302,6 +302,13 @@
                 <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
             </div>
 
+            <!-- 服务管理 -->
+            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
+                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">服务管理</div>
+                <button class="btn btn-danger" id="restart-btn" onclick="restartService()" disabled>重启服务</button>
+                <div class="hint" style="margin-top:6px">重启服务会中断所有用户会话，请谨慎操作</div>
+            </div>
+
 
             <!-- 分享码管理 -->
             <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
@@ -588,6 +595,7 @@
                 document.getElementById('slot34_special_pattern').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
+                document.getElementById('restart-btn').disabled = false;
                 loadGroups();
                 loadAdminShares();
                 loadUsers();
@@ -652,6 +660,28 @@
                 alert('请求失败，请重试');
             } finally {
                 btn.disabled = false; btn.textContent = '立即抓取所有用户';
+            }
+        }
+
+        async function restartService() {
+            if (!confirm('确定要重启服务吗？这会中断所有用户会话。')) return;
+            const btn = document.getElementById('restart-btn');
+            btn.disabled = true; btn.textContent = '重启中…';
+            try {
+                const resp = await safeFetch('/api/admin/restart', {
+                    method: 'POST',
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(data.message);
+                    // 服务重启后页面会断开连接
+                } else {
+                    alert(data.message || '重启失败');
+                    btn.disabled = false; btn.textContent = '重启服务';
+                }
+            } catch (e) {
+                // 重启成功时连接会断开，这里会报错，这是正常的
+                alert('服务已重启，请刷新页面');
             }
         }
 

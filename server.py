@@ -3,6 +3,7 @@ import json
 import logging
 import secrets
 import sqlite3
+import subprocess
 import threading
 import time as time_module
 import re
@@ -1207,6 +1208,35 @@ def admin_force_fetch():
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({'success': True, 'message': '已在后台开始抓取，请稍后刷新查看'})
+
+
+@app.route('/api/admin/restart', methods=['POST'])
+@csrf_protected
+def admin_restart():
+    """管理员重启服务"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    try:
+        # 使用 systemctl restart 重启服务
+        # 注意：需要配置 sudoers 允许 courseapp 用户无密码执行此命令
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'course-schedule'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            logger.error('重启服务失败: %s', result.stderr)
+            return jsonify({'success': False, 'message': f'重启失败: {result.stderr}'}), 500
+
+        # 如果能执行到这里，说明重启命令已发送（但服务可能已在重启中）
+        return jsonify({'success': True, 'message': '重启命令已发送，服务将重新启动'})
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'message': '重启命令超时'}), 500
+    except Exception as e:
+        logger.error('重启服务异常: %s', e)
+        return jsonify({'success': False, 'message': f'重启异常: {e}'}), 500
 
 
 # ── ICS 日历订阅 ────────────────────────────────────────────────────────────────
