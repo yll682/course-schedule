@@ -1316,20 +1316,23 @@
 
                         // 获取课程卡片可用宽度
                         const getAvailableWidth = () => {
-                            const cell = document.querySelector('.cell');
+                            // 尝试找到一个课程单元格（非表头、非时间列）
+                            const cell = document.querySelector('.cell:not(.header):not(.time-slot)');
+                            const isMobile = window.innerWidth < 768;
+
                             if (cell) {
                                 // 计算实际可用宽度：减去所有padding和border
-                                const isMobile = window.innerWidth < 768;
+                                const cellWidth = cell.offsetWidth;
                                 if (isMobile) {
                                     // 移动端：cell padding 4px*2 + course padding 5px*2 + border 3px = 21px
-                                    return cell.offsetWidth - 21;
+                                    return cellWidth - 21;
                                 } else {
                                     // 桌面端：cell padding 6px*2 + course padding 6px*2 + border 3px = 27px
-                                    return cell.offsetWidth - 27;
+                                    return cellWidth - 27;
                                 }
                             }
                             // 默认宽度（手机屏幕估算）
-                            return window.innerWidth < 768 ? 60 : 100;
+                            return isMobile ? 60 : 100;
                         };
 
                         const availableWidth = getAvailableWidth();
@@ -1389,52 +1392,15 @@
                         // 时间显示逻辑
                         const timeDisplayText = courseTime || course.time_slots.display;
                         const timeHtml = showTime ? (() => {
+                            // 时间保持正常字号，在"-"后换行
                             if (showEmoji) {
-                                // 先测量在最大字号下emoji+文本的宽度
-                                const maxSize = 0.68;
-                                const minSize = 0.5;
-                                const tempSpan = document.createElement('span');
-                                tempSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${maxSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                tempSpan.textContent = '⏰ ' + timeDisplayText;
-                                document.body.appendChild(tempSpan);
-                                const maxWidthTextWidth = tempSpan.offsetWidth;
-                                document.body.removeChild(tempSpan);
-
-                                // 计算最优字号
-                                const optimalSize = calculateOptimalFontSize(timeDisplayText, availableWidth, showEmoji, '⏰');
-
-                                // 判断是否应该在同一行：
-                                // 检查在最小字号下是否能放下
-                                const minSpan = document.createElement('span');
-                                minSpan.style.cssText = `
-                                    position: absolute;
-                                    visibility: hidden;
-                                    white-space: nowrap;
-                                    font-size: ${minSize}rem;
-                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                                `;
-                                minSpan.textContent = '⏰ ' + timeDisplayText;
-                                document.body.appendChild(minSpan);
-                                const minWidthTextWidth = minSpan.offsetWidth;
-                                document.body.removeChild(minSpan);
-
-                                if (minWidthTextWidth <= availableWidth) {
-                                    // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">⏰ ${esc(timeDisplayText)}</div>`;
-                                } else {
-                                    // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
-                                    return `<div class="course-info" style="font-size:${minSize}rem">⏰<br/>${esc(timeDisplayText)}</div>`;
-                                }
+                                // emoji单独一行，时间文本在"-"后可换行
+                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
+                                return `<div class="course-info">⏰<br/>${timeWithBreak}</div>`;
                             } else {
-                                // 不显示emoji，只显示文本
-                                const optimalSize = calculateOptimalFontSize(timeDisplayText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(timeDisplayText)}</div>`;
+                                // 不显示emoji，时间文本在"-"后可换行
+                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
+                                return `<div class="course-info">${timeWithBreak}</div>`;
                             }
                         })() : '';
 
