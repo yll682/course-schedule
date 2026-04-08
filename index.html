@@ -1367,7 +1367,7 @@
 
                                 if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem">📍 ${esc(locationText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">📍 ${esc(locationText)}</div>`;
                                 } else {
                                     // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
                                     return `<div class="course-info" style="font-size:${minSize}rem">📍<br/>${esc(locationText)}</div>`;
@@ -1375,7 +1375,7 @@
                             } else {
                                 // 不显示emoji，只显示文本
                                 const optimalSize = calculateOptimalFontSize(locationText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(locationText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(locationText)}</div>`;
                             }
                         })() : '';
 
@@ -1419,7 +1419,7 @@
 
                                 if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem">⏰ ${esc(timeDisplayText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">⏰ ${esc(timeDisplayText)}</div>`;
                                 } else {
                                     // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
                                     return `<div class="course-info" style="font-size:${minSize}rem">⏰<br/>${esc(timeDisplayText)}</div>`;
@@ -1427,7 +1427,7 @@
                             } else {
                                 // 不显示emoji，只显示文本
                                 const optimalSize = calculateOptimalFontSize(timeDisplayText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(timeDisplayText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(timeDisplayText)}</div>`;
                             }
                         })() : '';
 
@@ -1471,7 +1471,7 @@
 
                                 if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
-                                    return `<div class="course-info" style="font-size:${optimalSize}rem">👨‍🏫 ${esc(teacherText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">👨‍🏫 ${esc(teacherText)}</div>`;
                                 } else {
                                     // 即使缩小到最小字号也放不下：emoji单独一行，文本自动换行
                                     return `<div class="course-info" style="font-size:${minSize}rem">👨‍🏫<br/>${esc(teacherText)}</div>`;
@@ -1479,7 +1479,7 @@
                             } else {
                                 // 不显示emoji，只显示文本
                                 const optimalSize = calculateOptimalFontSize(teacherText, availableWidth, false, '');
-                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(teacherText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem;white-space:nowrap;word-wrap:normal">${esc(teacherText)}</div>`;
                             }
                         })() : '';
 
