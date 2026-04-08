@@ -1258,24 +1258,25 @@ def admin_restart():
                     'message': f'服务未运行或不存在，当前状态：{service_status or "未知"}'
                 }), 400
 
-            # 检查 sudoers 配置
-            sudoers_file = f'/etc/sudoers.d/{service_name}-restart'
-            if not os.path.exists(sudoers_file):
-                logger.error(f'sudoers 文件不存在: {sudoers_file}')
+            # 测试 sudo 权限是否配置正确（不检查文件是否存在，因为 courseapp 无法读取 440 权限的文件）
+            # 使用 sudo -n -l 测试是否有无密码执行权限
+            logger.info('测试 sudo 权限配置...')
+            test_result = subprocess.run(
+                ['sudo', '-n', '-l', '/usr/bin/systemctl', 'restart', service_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            if test_result.returncode != 0:
+                logger.error(f'sudo 权限测试失败: {test_result.stderr}')
                 return jsonify({
                     'success': False,
-                    'message': f'缺少权限配置文件：{sudoers_file}\n请运行部署脚本修复'
+                    'message': f'当前用户 {current_user} 没有无密码重启服务的权限\n'
+                              f'请运行部署脚本修复，或手动配置 sudoers'
                 }), 500
 
-            logger.info(f'sudoers 文件存在: {sudoers_file}')
-
-            # 尝试读取 sudoers 内容（调试用）
-            try:
-                with open(sudoers_file, 'r') as f:
-                    sudoers_content = f.read()
-                    logger.info(f'sudoers 内容: {sudoers_content.strip()}')
-            except Exception as e:
-                logger.warning(f'无法读取 sudoers 文件: {e}')
+            logger.info('sudo 权限测试通过')
 
             # 执行重启
             logger.info('执行重启命令: sudo systemctl restart ' + service_name)
