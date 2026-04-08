@@ -637,6 +637,7 @@
 
                         const maxWidth = cellWidth - margin * 2 - 6;
                         const lineHeight = 13;
+                        const infoLineHeight = 11;
                         let textY = y + margin + 16;  // 增加顶部距离
 
                         // 绘制课程名（最多2行）
@@ -648,36 +649,13 @@
                         });
                         textY += nameLinesToShow.length * lineHeight + 2;
 
-                        // 动态计算最优字号的函数（Canvas版本）
-                        const calculateOptimalFontSizeCanvas = (text, maxWidth, showEmoji, emojiChar = '') => {
-                            const minSize = 7;   // 最小字号（px），保证可读性
-                            const maxSize = 10;  // 最大字号（px），舒适阅读
-                            const sizeStep = 0.5; // 每次调整的步长
-
-                            // 从最大字号开始尝试
-                            for (let size = maxSize; size >= minSize; size -= sizeStep) {
-                                ctx.font = `${size}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
-                                const fullText = showEmoji && emojiChar ? `${emojiChar} ${text}` : text;
-                                const textWidth = ctx.measureText(fullText).width;
-
-                                if (textWidth <= maxWidth) {
-                                    return size;
-                                }
-                            }
-
-                            return minSize;
-                        };
-
+                        ctx.font = '9px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                         // 使用更深的颜色以保证打印清晰度
                         ctx.fillStyle = '#555555';
 
                         // 地点
                         const location = course.location || '';
                         if (location) {
-                            const optimalSize = calculateOptimalFontSizeCanvas(location, maxWidth, showEmoji, '📍');
-                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
-                            const infoLineHeight = optimalSize + 2;
-
                             if (showEmoji) {
                                 const locationText = '📍 ' + location;
                                 const textWidth = ctx.measureText(locationText).width;
@@ -712,9 +690,6 @@
                         if (showTime) {
                             const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                             const timeStr = courseTime || course.time_slots?.display || times[slot];
-                            const optimalSize = calculateOptimalFontSizeCanvas(timeStr, maxWidth, showEmoji, '⏰');
-                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
-                            const infoLineHeight = optimalSize + 2;
 
                             if (showEmoji) {
                                 const timeText = '⏰ ' + timeStr;
@@ -749,10 +724,6 @@
                         // 教师（最多2行）
                         const teacher = course.teacher || '';
                         if (teacher) {
-                            const optimalSize = calculateOptimalFontSizeCanvas(teacher, maxWidth, showEmoji, '👨‍🏫');
-                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
-                            const infoLineHeight = optimalSize + 2;
-
                             if (showEmoji) {
                                 const teacherText = '👨‍🏫 ' + teacher;
                                 const teacherLines = wrapText(ctx, teacherText, maxWidth);
@@ -1313,8 +1284,8 @@
                         // 动态计算最优字号的函数
                         const calculateOptimalFontSize = (text, availableWidth, showEmoji, emojiChar = '') => {
                             // 字号范围（单位：rem）
-                            const minSize = 0.52;  // 最小字号，保证可读性
-                            const maxSize = 0.68;  // 最大字号，舒适阅读
+                            const minSize = 0.56;  // 最小字号（约9px），保证可读性
+                            const maxSize = 0.68;  // 最大字号（约11px），舒适阅读
                             const sizeStep = 0.02; // 每次调整的步长
 
                             // 从最大字号开始尝试
