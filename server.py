@@ -1291,7 +1291,10 @@ def admin_restart():
             logger.info(f'重启命令 stdout: {result.stdout}')
             logger.info(f'重启命令 stderr: {result.stderr}')
 
-            if result.returncode != 0:
+            # 返回码 -15 表示进程被 SIGTERM 终止，这在重启自己时是正常的
+            # 返回码 0 表示命令成功执行
+            # 其他负数是其他信号，也通常表示进程被终止
+            if result.returncode not in [0, -15]:
                 error_msg = result.stderr.strip()
                 logger.error('重启服务失败: %s', error_msg)
 
@@ -1308,6 +1311,7 @@ def admin_restart():
                     'message': f'重启失败: {error_msg}\n\n详细信息请查看服务器日志'
                 }), 500
 
+            # 返回码 0 或 -15 都表示重启命令已执行
             return jsonify({
                 'success': True,
                 'message': '重启命令已发送，服务将重新启动（约5-10秒）'
