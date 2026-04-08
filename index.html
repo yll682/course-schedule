@@ -1318,8 +1318,15 @@
                         const getAvailableWidth = () => {
                             const cell = document.querySelector('.cell');
                             if (cell) {
-                                // 减去padding和边框
-                                return cell.offsetWidth - 12 - 6; // 左右padding(6px) + 左边框(3px) + 额外空间
+                                // 计算实际可用宽度：减去所有padding和border
+                                const isMobile = window.innerWidth < 768;
+                                if (isMobile) {
+                                    // 移动端：cell padding 4px*2 + course padding 5px*2 + border 3px = 21px
+                                    return cell.offsetWidth - 21;
+                                } else {
+                                    // 桌面端：cell padding 6px*2 + course padding 6px*2 + border 3px = 27px
+                                    return cell.offsetWidth - 27;
+                                }
                             }
                             // 默认宽度（手机屏幕估算）
                             return window.innerWidth < 768 ? 60 : 100;
