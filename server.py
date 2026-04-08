@@ -413,7 +413,9 @@ threading.Thread(target=background_fetch, daemon=True).start()
 @app.route('/')
 def index():
     # 始终返回 index.html；认证检查由前端 JS 处理（支持导入预览模式）
-    return send_from_directory('.', 'index.html')
+    response = send_from_directory('.', 'index.html')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 
 @app.route('/<path:path>')
@@ -429,6 +431,11 @@ def static_files(path):
     ext = os.path.splitext(filename)[1].lower()
     if filename in _BLOCKED or ext in _BLOCKED_EXTS:
         return jsonify({'error': 'Not found'}), 404
+
+    if path == 'sw.js' or path.endswith('.html'):
+        response = send_from_directory('.', safe_path)
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return response
 
     return send_from_directory('.', safe_path)
 

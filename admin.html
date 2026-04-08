@@ -26,29 +26,43 @@
     </script>
     <link rel="stylesheet" href="/style.css">
     <style>
-        body { padding: 20px; }
-        .container { max-width: 700px; margin: 0 auto; }
+        body { padding: 16px 16px 40px; }
+        .container { max-width: 680px; margin: 0 auto; }
+
         /* ── 顶栏 ── */
         .page-header {
-            display: flex; align-items: center; gap: 12px;
-            margin-bottom: 20px;
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 24px; padding-bottom: 16px;
+            border-bottom: 1px solid var(--c-border-soft);
         }
-        .page-title { margin: 0; font-size: 1.25rem; flex: 1; }
-        .user-label { font-size: 0.85rem; color: var(--c-muted); white-space: nowrap; }
+        .back-btn {
+            display: flex; align-items: center; gap: 5px;
+            padding: 6px 12px; border: 1px solid var(--c-border-input);
+            border-radius: 8px; background: var(--c-surface);
+            color: var(--c-text); font-size: 0.85rem; cursor: pointer;
+            text-decoration: none; white-space: nowrap;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .back-btn:hover { background: var(--c-hover); border-color: var(--c-primary); }
+        .page-title { margin: 0; font-size: 1.15rem; font-weight: 600; flex: 1; }
+        .user-label { font-size: 0.82rem; color: var(--c-muted); white-space: nowrap; }
+
         /* ── 卡片 ── */
         .card {
             background: var(--c-surface);
-            border-radius: 8px; padding: 20px; margin-bottom: 16px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            border: 1px solid var(--c-border-soft);
+            border-radius: 12px; padding: 0; margin-bottom: 12px;
+            overflow: hidden;
         }
         .card-header {
-            display: flex; align-items: center; gap: 10px;
-            margin-bottom: 16px; padding-bottom: 10px;
-            border-bottom: 1px solid var(--c-border-soft);
+            display: flex; align-items: center; gap: 8px;
+            padding: 14px 18px; border-bottom: 1px solid var(--c-border-soft);
         }
-        .card-header h2 { margin: 0; font-size: 0.95rem; }
+        .card-header h2 { margin: 0; font-size: 0.9rem; font-weight: 600; flex: 1; }
+        .card-body { padding: 16px 18px; }
+
         .badge {
-            font-size: 0.68rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+            font-size: 0.65rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; letter-spacing: 0.02em;
         }
         .badge-admin { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
         .badge-user  {
@@ -56,89 +70,227 @@
             color: var(--c-badge-user-text);
             border: 1px solid var(--c-badge-user-bdr);
         }
+
         /* ── 字段 ── */
         .field { margin-bottom: 14px; }
-        .field label { display: block; font-size: 0.88rem; font-weight: 500; margin-bottom: 5px; }
-        .field .hint { font-size: 0.76rem; color: var(--c-muted); margin-top: 4px; }
+        .field:last-child { margin-bottom: 0; }
+        .field label { display: block; font-size: 0.82rem; font-weight: 500; margin-bottom: 5px; color: var(--c-text); }
+        .field .hint { font-size: 0.75rem; color: var(--c-muted); margin-top: 5px; line-height: 1.5; }
         .field input, .field select {
             width: 100%; padding: 8px 11px;
-            border: 1px solid var(--c-border-input); border-radius: 6px;
-            background: var(--c-input); color: var(--c-text); font-size: 0.92rem;
+            border: 1px solid var(--c-border-input); border-radius: 8px;
+            background: var(--c-input); color: var(--c-text); font-size: 0.88rem;
+            font-family: inherit;
+            transition: border-color 0.15s;
         }
-        .field input:disabled {
+        .field input:focus, .field select:focus {
+            outline: none; border-color: var(--c-primary);
+        }
+        .field input:disabled, .field select:disabled {
             background: var(--c-disabled-bg);
             color: var(--c-disabled-text);
             cursor: not-allowed;
         }
-        /* ── 按钮 ── */
-        .actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; align-items: center; }
-        .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 0.88rem; cursor: pointer; }
-        .btn-primary { background: var(--c-primary); color: white; }
-        .btn-primary:hover { opacity: 0.85; }
-        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* ── 按钮组 ── */
+        .btn-group {
+            display: flex; gap: 8px; flex-wrap: wrap;
+        }
+        .btn-group-row {
+            display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+            padding: 10px 18px; border-top: 1px solid var(--c-border-soft);
+        }
+        .btn-group-row:first-child { border-top: none; }
+        .btn-group-row .spacer { flex: 1; }
+
+        .btn {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 7px 16px; border: 1px solid transparent;
+            border-radius: 8px; font-size: 0.84rem; font-family: inherit;
+            cursor: pointer; white-space: nowrap; transition: all 0.15s;
+            font-weight: 500;
+        }
+        .btn-primary { background: var(--c-primary); color: white; border-color: var(--c-primary); }
+        .btn-primary:hover { opacity: 0.88; }
+        .btn-primary:disabled { background: var(--c-disabled-bg); color: var(--c-disabled-text); border-color: var(--c-border-input); cursor: not-allowed; }
         .btn-default {
-            background: var(--c-input); color: var(--c-text);
-            border: 1px solid var(--c-border-input);
+            background: var(--c-surface); color: var(--c-text);
+            border-color: var(--c-border-input);
         }
         .btn-default:hover { background: var(--c-hover); }
-        .btn-danger { color: #ff4d4f; border-color: #ffa39e; }
+        .btn-ghost {
+            background: transparent; color: var(--c-text);
+            border-color: transparent; padding-left: 8px; padding-right: 8px;
+        }
+        .btn-ghost:hover { background: var(--c-hover); }
+        .btn-danger { color: #ff4d4f; border-color: #ffa39e; background: var(--c-surface); }
         .btn-danger:hover { background: #fff1f0; }
-        .save-status { font-size: 0.82rem; color: #52c41a; display: none; }
-        .save-status.show { display: inline; }
-        /* ── 分隔 ── */
-        .section-title { font-size: 0.82rem; color: var(--c-muted); margin: 14px 0 8px; }
-        /* ── 列表项 ── */
+        .btn-sm { padding: 4px 10px; font-size: 0.78rem; border-radius: 6px; }
+
+        .save-status { font-size: 0.8rem; color: #52c41a; display: none; align-items: center; gap: 4px; }
+        .save-status.show { display: inline-flex; }
+
+        /* ── 分隔线小标题 ── */
+        .section-label {
+            font-size: 0.75rem; font-weight: 600; color: var(--c-muted);
+            text-transform: uppercase; letter-spacing: 0.06em;
+            margin: 0 0 10px;
+        }
+
+        /* ── 行项目（分享码/用户等） ── */
         .token-row {
             display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-            padding: 8px 10px;
+            padding: 9px 12px;
             border: 1px solid var(--c-border-soft);
-            border-radius: 6px; margin-bottom: 6px;
+            border-radius: 8px; margin-bottom: 6px;
+            background: var(--c-subtle);
+            transition: background 0.12s;
         }
+        .token-row:hover { background: var(--c-hover); }
         .user-row {
-            padding: 10px; border: 1px solid var(--c-border-soft);
-            border-radius: 6px; margin-bottom: 8px;
+            padding: 10px 12px; border: 1px solid var(--c-border-soft);
+            border-radius: 8px; margin-bottom: 6px;
+            background: var(--c-subtle);
         }
-        .user-row-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px; }
+        .user-row-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; }
         .week-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
         .week-chip {
-            padding: 2px 8px; font-size: 0.8rem;
+            padding: 2px 8px; font-size: 0.78rem;
             border: 1px solid var(--c-border-input);
-            border-radius: 4px; cursor: pointer;
-            background: var(--c-input); color: var(--c-text);
+            border-radius: 6px; cursor: pointer;
+            background: var(--c-surface); color: var(--c-text);
+            transition: all 0.12s;
         }
-        .week-chip:hover { background: #e6f4ff; border-color: #1890ff; color: #1890ff; }
+        .week-chip:hover { background: var(--c-primary); border-color: var(--c-primary); color: white; }
+
+        /* ── 高级选项折叠 ── */
         .advanced-toggle {
             width: 100%; display: flex; align-items: center; justify-content: space-between;
-            gap: 12px; padding: 10px 12px; margin-top: 16px;
+            gap: 12px; padding: 11px 14px;
             border: 1px solid var(--c-border-soft); border-radius: 8px;
             background: var(--c-subtle); color: var(--c-text);
-            cursor: pointer; font-size: 0.88rem; text-align: left;
+            cursor: pointer; font-size: 0.86rem; text-align: left;
+            transition: background 0.15s;
         }
         .advanced-toggle:hover { background: var(--c-hover); }
+        .advanced-toggle-title { font-weight: 500; }
+        .advanced-toggle-icon {
+            font-size: 0.75rem; color: var(--c-muted);
+            transition: transform 0.2s;
+        }
+        .advanced-toggle[aria-expanded="true"] .advanced-toggle-icon { transform: rotate(180deg); }
         .advanced-panel {
-            display: none; margin-top: 12px; padding: 14px;
+            display: none; margin-top: 10px; padding: 14px 16px;
             border: 1px solid var(--c-border-soft); border-radius: 8px;
             background: var(--c-subtle);
         }
         .advanced-panel.open { display: block; }
-        .advanced-summary { font-size: 0.78rem; color: var(--c-muted); }
+
+        /* ── 选项行（checkbox） ── */
+        .option-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 0; cursor: pointer;
+            border-bottom: 1px solid var(--c-border-soft);
+        }
+        .option-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .option-row:first-child { padding-top: 0; }
+        .option-row input[type="checkbox"] {
+            width: 16px; height: 16px; margin: 0; flex-shrink: 0; cursor: pointer;
+            accent-color: var(--c-primary);
+        }
+        .option-row span { font-size: 0.86rem; flex: 1; }
+
+        /* ── 主题色 ── */
+        .theme-grid { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .theme-dot {
+            width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.18s; position: relative;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .theme-dot:hover { transform: scale(1.15); }
+        .theme-dot.selected {
+            box-shadow: 0 0 0 2px var(--c-surface), 0 0 0 4px currentColor;
+        }
+        .theme-dot-check { color: white; font-size: 11px; font-weight: 700; }
+
+        /* ── 分割线 ── */
+        .divider {
+            height: 1px; background: var(--c-border-soft);
+            margin: 14px 0;
+        }
+
         /* ── 班级分组 ── */
-        .class-group { margin-bottom: 12px; }
+        .class-group { margin-bottom: 8px; }
         .class-header {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 10px 12px;
+            padding: 9px 12px;
             background: var(--c-subtle);
             border: 1px solid var(--c-border-soft);
-            border-radius: 6px; cursor: pointer;
-            font-size: 0.9rem; font-weight: 500;
+            border-radius: 8px; cursor: pointer;
+            font-size: 0.88rem; font-weight: 500;
             transition: background 0.15s;
         }
         .class-header:hover { background: var(--c-hover); }
-        .class-header .arrow { font-size: 0.8rem; color: var(--c-muted); transition: transform 0.2s; }
+        .class-header .arrow { font-size: 0.72rem; color: var(--c-muted); transition: transform 0.2s; }
+        .class-header.open { border-radius: 8px 8px 0 0; border-bottom-color: transparent; }
         .class-header.open .arrow { transform: rotate(180deg); }
-        .class-users { display: none; padding-top: 8px; }
+        .class-users { display: none; border: 1px solid var(--c-border-soft); border-top: none; border-radius: 0 0 8px 8px; padding: 8px; }
         .class-users.open { display: block; }
-        .class-count { font-size: 0.78rem; color: var(--c-muted); font-weight: normal; }
+        .class-count { font-size: 0.75rem; color: var(--c-muted); font-weight: 400; }
+
+        /* ── 生成结果卡片 ── */
+        .result-card {
+            background: #f6ffed; border: 1px solid #b7eb8f;
+            border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+        }
+        .result-card-title { font-size: 0.78rem; color: #52c41a; margin-bottom: 8px; }
+        .result-code { font-size: 1.3rem; letter-spacing: 5px; font-weight: 700; }
+        @media (prefers-color-scheme: dark) {
+            .result-card { background: #162312; border-color: #274916; }
+            .result-card-title { color: #6abe39; }
+        }
+
+        /* ── 空状态 ── */
+        .empty-hint { color: var(--c-muted); font-size: 0.82rem; padding: 8px 0; }
+
+        /* ── 开关行（左文字右 toggle）── */
+        .toggle-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 10px 12px; cursor: pointer;
+            border-bottom: 1px solid var(--c-border-soft);
+            gap: 12px;
+        }
+        .toggle-row:last-child { border-bottom: none; }
+        .toggle-row-label { font-size: 0.86rem; flex: 1; user-select: none; }
+        .toggle-row input[type="checkbox"] { display: none; }
+        .toggle-switch {
+            width: 36px; height: 20px; border-radius: 10px;
+            background: var(--c-border-input); flex-shrink: 0;
+            position: relative; transition: background 0.2s;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: white; top: 3px; left: 3px;
+            transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle-row input:checked ~ .toggle-switch { background: var(--c-primary); }
+        .toggle-row input:checked ~ .toggle-switch::after { transform: translateX(16px); }
+
+        /* ── Chip 选择器 ── */
+        .chip-group { display: flex; gap: 6px; }
+        .chip {
+            padding: 5px 14px; border-radius: 20px; font-size: 0.84rem;
+            border: 1px solid var(--c-border-input); cursor: pointer;
+            background: var(--c-surface); color: var(--c-text);
+            font-family: inherit; transition: all 0.15s; font-weight: 500;
+        }
+        .chip:hover { border-color: var(--c-primary); color: var(--c-primary); }
+        .chip.active {
+            background: var(--c-primary); color: white;
+            border-color: var(--c-primary);
+        }
     </style>
 </head>
 <body>
@@ -146,8 +298,8 @@
 
         <!-- ── 顶栏 ── -->
         <div class="page-header">
-            <button class="btn btn-default" onclick="location.href='/'" style="padding:5px 12px">← 返回</button>
-            <h1 class="page-title">⚙️ 设置</h1>
+            <a class="back-btn" onclick="location.href='/'">← 返回</a>
+            <h1 class="page-title">设置</h1>
             <span class="user-label" id="user-info"></span>
         </div>
 
@@ -157,81 +309,77 @@
                 <h2>账户</h2>
                 <span class="badge badge-user">所有用户</span>
             </div>
-            <div class="actions">
-                <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出整学期课表</button>
-                <button class="btn btn-default" onclick="clearLocalCache()">清空页面缓存</button>
-                <button class="btn btn-default btn-danger" onclick="doLogout()">退出登录</button>
-            </div>
-            <div id="export-status" style="font-size:0.82rem;color:var(--c-muted);margin-top:8px;display:none"></div>
-            <div id="cache-clear-status" style="font-size:0.82rem;color:#52c41a;margin-top:8px;display:none"></div>
-
-            <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
-                <span>
-                    <strong>高级选项</strong>
-                    <span class="advanced-summary">配置首页左上角按钮和显示设置</span>
-                </span>
-                <span id="advanced-toggle-icon">▾</span>
-            </button>
-            <div class="advanced-panel" id="advanced-panel">
-                <!-- 按钮设置 -->
-                <div class="field" style="margin:0 0 12px 0">
-                    <label for="home-button-mode">左上角按钮功能</label>
-                    <select id="home-button-mode" onchange="saveAdvancedOptions()">
-                        <option value="back_to_week">回本周</option>
-                        <option value="capture">截图</option>
-                    </select>
+            <div class="card-body">
+                <div class="btn-group">
+                    <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出课表</button>
+                    <button class="btn btn-default" onclick="clearLocalCache()">清空缓存</button>
                 </div>
+                <div style="margin-top:8px">
+                    <button class="btn btn-danger" onclick="doLogout()">退出登录</button>
+                </div>
+                <div id="export-status" style="font-size:0.8rem;color:var(--c-muted);margin-top:8px;display:none"></div>
+                <div id="cache-clear-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
 
-                <!-- 显示设置 -->
-                <div style="padding-top:12px;border-top:1px solid var(--c-border-soft)">
-                    <div style="font-size:0.82rem;font-weight:500;color:var(--c-muted);margin-bottom:8px">课程卡片显示</div>
-                    <div style="display:flex;flex-direction:column;gap:8px">
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
-                            <span style="font-size:0.88rem">显示上课时间</span>
+                <div class="divider" style="margin-top:14px"></div>
+
+                <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
+                    <span class="advanced-toggle-title">高级选项</span>
+                    <span class="advanced-toggle-icon" id="advanced-toggle-icon">▾</span>
+                </button>
+                <div class="advanced-panel" id="advanced-panel">
+                    <!-- 按钮模式 -->
+                    <div class="section-label" style="margin-bottom:8px">首页左上角按钮</div>
+                    <div class="chip-group" style="margin-bottom:16px">
+                        <button class="chip" id="chip-back" onclick="selectButtonMode('back_to_week')">回本周</button>
+                        <button class="chip" id="chip-capture" onclick="selectButtonMode('capture')">截图</button>
+                    </div>
+                    <input type="hidden" id="home-button-mode" value="back_to_week">
+
+                    <!-- 显示设置 -->
+                    <div class="section-label" style="margin-bottom:0">课程卡片显示</div>
+                    <div style="border:1px solid var(--c-border-soft);border-radius:8px;overflow:hidden;margin-top:8px;margin-bottom:14px">
+                        <label class="toggle-row">
+                            <span class="toggle-row-label">显示上课时间</span>
+                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked>
+                            <span class="toggle-switch"></span>
                         </label>
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
-                            <span style="font-size:0.88rem">显示上课地点</span>
+                        <label class="toggle-row">
+                            <span class="toggle-row-label">显示上课地点</span>
+                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked>
+                            <span class="toggle-switch"></span>
                         </label>
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked style="width:16px;height:16px;margin:0">
-                            <span style="font-size:0.88rem">显示 Emoji 图标</span>
+                        <label class="toggle-row">
+                            <span class="toggle-row-label">显示 Emoji 图标</span>
+                            <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked>
+                            <span class="toggle-switch"></span>
                         </label>
                     </div>
-                </div>
 
-                <!-- 主题色 -->
-                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
-                    <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">主题色</div>
-                    <div id="theme-colors" style="display:flex;gap:10px;flex-wrap:wrap"></div>
-                </div>
+                    <!-- 主题色 -->
+                    <div class="section-label" style="margin-bottom:8px">主题色</div>
+                    <div id="theme-colors" class="theme-grid" style="margin-bottom:10px"></div>
 
-                <div class="save-status" id="advanced-save-status" style="margin-top:10px">✓ 已保存</div>
+                    <div class="save-status" id="advanced-save-status">✓ 已保存</div>
 
-                <!-- 日历订阅 -->
-                <div id="ics-section" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft);display:none">
-                    <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">日历订阅</div>
-                    <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
-
-                    <div id="ics-content">
-                        <div id="ics-no-subscription">
-                            <button class="btn btn-primary" onclick="createIcsSubscription()">生成订阅链接</button>
-                            <div class="hint" style="margin-top:8px">
-                                生成ICS订阅链接后，你可以将其导入到Google日历、Apple日历、Outlook等第三方日历应用中，随时查看课表。
+                    <!-- 日历订阅 -->
+                    <div id="ics-section" style="display:none">
+                        <div class="divider"></div>
+                        <div class="section-label" style="margin-bottom:8px">日历订阅</div>
+                        <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
+                        <div id="ics-content">
+                            <div id="ics-no-subscription">
+                                <button class="btn btn-primary btn-sm" onclick="createIcsSubscription()">生成订阅链接</button>
+                                <div class="field hint" style="margin-top:8px">
+                                    生成后可导入到 Google 日历、Apple 日历、Outlook 等应用，自动同步课表。
+                                </div>
                             </div>
-                        </div>
-
-                        <div id="ics-has-subscription" style="display:none">
-                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-                                <input type="text" id="ics-url" readonly style="flex:1;min-width:200px;padding:8px;font-size:0.85rem;border:1px solid var(--c-border-input);border-radius:6px;background:var(--c-subtle)">
-                                <button class="btn btn-default" onclick="copyIcsUrl()">复制链接</button>
-                                <button class="btn btn-default btn-danger" onclick="revokeIcsSubscription()">撤销订阅</button>
-                            </div>
-                            <div class="hint">
-                                订阅创建时间：<span id="ics-created-at"></span>
-                                <br>
-                                <strong>使用说明：</strong>将上述链接添加到日历应用的「订阅」或「添加外部日历」功能中即可。各平台会自动同步课表更新。
+                            <div id="ics-has-subscription" style="display:none">
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                                    <input type="text" id="ics-url" readonly style="flex:1;min-width:180px;padding:7px 10px;font-size:0.82rem;border:1px solid var(--c-border-input);border-radius:8px;background:var(--c-input);color:var(--c-text)">
+                                    <button class="btn btn-default btn-sm" onclick="copyIcsUrl()">复制链接</button>
+                                    <button class="btn btn-danger btn-sm" onclick="revokeIcsSubscription()">撤销</button>
+                                </div>
+                                <div class="field hint">订阅创建时间：<span id="ics-created-at"></span></div>
                             </div>
                         </div>
                     </div>
@@ -245,43 +393,48 @@
                 <h2>分享码</h2>
                 <span class="badge badge-user">所有用户</span>
             </div>
+            <div class="card-body">
+                <!-- 创建 -->
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                    <div class="field" style="margin:0;flex:2;min-width:100px">
+                        <label>有效期</label>
+                        <select id="share-expires">
+                            <option value="1d">1 天</option>
+                            <option value="7d" selected>7 天</option>
+                            <option value="30d">30 天</option>
+                            <option value="180d">半年</option>
+                        </select>
+                    </div>
+                    <div class="field" style="margin:0;flex:1;min-width:70px">
+                        <label>从第几周</label>
+                        <input type="number" id="share-week-from" value="1" min="1" max="30">
+                    </div>
+                    <div class="field" style="margin:0;flex:1;min-width:70px">
+                        <label>到第几周</label>
+                        <input type="number" id="share-week-to" value="19" min="1" max="30">
+                    </div>
+                    <button class="btn btn-primary" onclick="createShare()" style="white-space:nowrap;align-self:flex-end">生成</button>
+                </div>
 
-            <!-- 创建 -->
-            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
-                <div class="field" style="margin:0;flex:1;min-width:110px">
-                    <label>有效期</label>
-                    <select id="share-expires">
-                        <option value="1d">1 天</option>
-                        <option value="7d" selected>7 天</option>
-                        <option value="30d">30 天</option>
-                        <option value="180d">半年</option>
-                    </select>
+                <!-- 生成结果 -->
+                <div id="share-result" style="display:none;margin-top:12px">
+                    <div class="result-card">
+                        <div class="result-card-title">✓ 分享码已生成</div>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                            <code class="result-code" id="share-result-code"></code>
+                            <div style="display:flex;gap:6px">
+                                <button class="btn btn-default btn-sm" onclick="copyCode()">复制码</button>
+                                <button class="btn btn-primary btn-sm" onclick="copyShareLink()">复制链接</button>
+                            </div>
+                        </div>
+                        <div id="share-result-info" style="font-size:0.75rem;color:var(--c-muted);margin-top:6px"></div>
+                    </div>
                 </div>
-                <div class="field" style="margin:0;flex:1;min-width:70px">
-                    <label>从第几周</label>
-                    <input type="number" id="share-week-from" value="1" min="1" max="30">
-                </div>
-                <div class="field" style="margin:0;flex:1;min-width:70px">
-                    <label>到第几周</label>
-                    <input type="number" id="share-week-to" value="19" min="1" max="30">
-                </div>
-                <button class="btn btn-primary" onclick="createShare()" style="white-space:nowrap">生成分享码</button>
+
+                <!-- 我的分享码列表 -->
+                <div class="section-label" style="margin-top:16px" id="share-list-label">我的分享码</div>
+                <div id="share-list">加载中...</div>
             </div>
-
-            <!-- 生成结果 -->
-            <div id="share-result" style="display:none;background:#f6ffed;border:1px solid #b7eb8f;border-radius:6px;padding:12px;margin-bottom:14px">
-                <div style="font-size:0.82rem;color:#52c41a;margin-bottom:6px">✓ 分享码已生成</div>
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                    <code id="share-result-code" style="font-size:1.25rem;letter-spacing:4px;font-weight:bold"></code>
-                    <button class="btn btn-default" style="padding:4px 10px;font-size:0.8rem" onclick="copyCode()">复制分享码</button>
-                    <button class="btn btn-primary" style="padding:4px 10px;font-size:0.8rem" onclick="copyShareLink()">复制分享链接</button>
-                </div>
-                <div id="share-result-info" style="font-size:0.78rem;color:#999;margin-top:4px"></div>
-            </div>
-
-            <!-- 我的分享码列表 -->
-            <div class="section-title" id="share-list-label">我的分享码</div>
-            <div id="share-list">加载中...</div>
         </div>
 
         <!-- ── 后台抓取（管理员）── -->
@@ -290,33 +443,32 @@
                 <h2>后台抓取</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
-            <div class="field">
-                <label>自动抓取间隔（分钟）</label>
-                <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
-                <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30-120 分钟。</div>
-            </div>
-            <div class="field">
-                <label>第3、4节特殊时间教学楼标识</label>
-                <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
-                <div class="hint">地点包含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多个标识用英文逗号分隔，如 <code>教2,实2</code>。留空则不启用。</div>
-            </div>
-            <div class="actions">
-                <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
-                <span class="save-status" id="admin-save-status">✓ 已保存</span>
-                <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
-            </div>
+            <div class="card-body">
+                <div class="field">
+                    <label>自动抓取间隔（分钟）</label>
+                    <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
+                    <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30–120 分钟。</div>
+                </div>
+                <div class="field">
+                    <label>第3、4节特殊时间教学楼标识</label>
+                    <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
+                    <div class="hint">地点含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多标识用英文逗号分隔，如 <code>教2,实2</code>。留空不启用。</div>
+                </div>
+                <div class="btn-group" style="margin-top:4px">
+                    <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
+                    <span class="save-status" id="admin-save-status">✓ 已保存</span>
+                    <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
+                </div>
 
-            <!-- 服务管理 -->
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
-                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">服务管理</div>
+                <!-- 服务管理 -->
+                <div class="divider"></div>
+                <div class="section-label" style="margin-bottom:10px">服务管理</div>
                 <button class="btn btn-danger" id="restart-btn" onclick="restartService()" disabled>重启服务</button>
                 <div class="hint" style="margin-top:6px">重启服务会中断所有用户会话，请谨慎操作</div>
-            </div>
 
-
-            <!-- 分享码管理 -->
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
-                <div style="font-size:0.88rem;font-weight:500;margin-bottom:10px">分享码管理</div>
+                <!-- 分享码管理 -->
+                <div class="divider"></div>
+                <div class="section-label" style="margin-bottom:10px">分享码管理</div>
                 <div id="admin-share-list">加载中...</div>
             </div>
         </div>
@@ -327,22 +479,20 @@
                 <h2>用户组管理</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
-            <div style="font-size:0.8rem;color:var(--c-muted);margin-bottom:12px">将用户分组并授予不同权限。未分组的用户使用默认组权限。</div>
+            <div class="card-body">
+                <div class="hint" style="margin-bottom:14px">将用户分组并授予不同权限。未分组用户使用默认组权限。</div>
+                <div class="field">
+                    <label>新用户默认组</label>
+                    <select id="default-group-select" onchange="saveDefaultGroup()" disabled>
+                        <option value="">加载中...</option>
+                    </select>
+                    <div class="hint">新注册用户将自动加入此组。</div>
+                </div>
 
-            <!-- 默认组设置 -->
-            <div class="field">
-                <label>新用户默认组</label>
-                <select id="default-group-select" onchange="saveDefaultGroup()" disabled>
-                    <option value="">加载中...</option>
-                </select>
-                <div class="hint">新注册用户将自动加入此组。</div>
-            </div>
-
-            <!-- 用户组列表 -->
-            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--c-border-soft)">
+                <div class="divider"></div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-                    <span style="font-size:0.88rem;font-weight:500">用户组列表</span>
-                    <button class="btn btn-primary" onclick="showGroupEditModal()" style="padding:4px 12px;font-size:0.82rem">+ 新建组</button>
+                    <div class="section-label" style="margin:0">用户组列表</div>
+                    <button class="btn btn-primary btn-sm" onclick="showGroupEditModal()">+ 新建组</button>
                 </div>
                 <div id="groups-list">加载中...</div>
             </div>
@@ -354,8 +504,10 @@
                 <h2>用户课表</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
-            <div style="font-size:0.8rem;color:var(--c-muted);margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
-            <div id="users-list">加载中...</div>
+            <div class="card-body">
+                <div class="hint" style="margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
+                <div id="users-list">加载中...</div>
+            </div>
         </div>
 
     </div>
@@ -505,11 +657,9 @@
         function syncAdvancedPanel(open) {
             const panel = document.getElementById('advanced-panel');
             const toggle = document.getElementById('advanced-toggle');
-            const icon = document.getElementById('advanced-toggle-icon');
-            if (!panel || !toggle || !icon) return;
+            if (!panel || !toggle) return;
             panel.classList.toggle('open', open);
             toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            icon.textContent = open ? '▴' : '▾';
             writeLocalPreference(ADVANCED_PANEL_KEY, open ? '1' : '0');
         }
 
@@ -527,8 +677,20 @@
             document.getElementById('show-course-time').checked = showTime === '1';
             document.getElementById('show-course-location').checked = showLocation === '1';
             document.getElementById('show-emoji').checked = showEmoji === '1';
+            syncChipMode(mode);
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
             loadThemeColors();
+        }
+
+        function syncChipMode(mode) {
+            document.getElementById('chip-back').classList.toggle('active', mode === 'back_to_week');
+            document.getElementById('chip-capture').classList.toggle('active', mode === 'capture');
+        }
+
+        function selectButtonMode(mode) {
+            document.getElementById('home-button-mode').value = mode;
+            syncChipMode(mode);
+            saveAdvancedOptions();
         }
 
         function loadThemeColors() {
@@ -539,11 +701,11 @@
                 const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 const colors = isDark ? t.dark : t.light;
                 const isSelected = saved ? (JSON.parse(saved).light.primary === t.light.primary) : (i === 0);
-                return `<div class="theme-color-item ${isSelected ? 'selected' : ''}"
-                             style="background:${colors.primary};width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid ${isSelected ? colors.primary : 'transparent'};box-shadow:${isSelected ? `0 0 0 2px var(--c-surface), 0 0 0 4px ${colors.primary}` : 'none'};transition:all 0.2s"
+                return `<div class="theme-dot ${isSelected ? 'selected' : ''}"
+                             style="background:${colors.primary};color:${colors.primary}"
                              onclick="selectThemeColor(${i})"
                              title="${t.name}">
-                            ${isSelected ? '<span style="color:white;font-size:14px;line-height:26px">✓</span>' : ''}
+                            ${isSelected ? '<span class="theme-dot-check">✓</span>' : ''}
                         </div>`;
             }).join('');
         }
@@ -756,7 +918,7 @@
             const data = await resp.json();
             const el   = document.getElementById('share-list');
             if (!data.tokens || data.tokens.length === 0) {
-                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
+                el.innerHTML = '<div class="empty-hint">暂无分享码</div>';
                 return;
             }
             // 获取当前用户名用于分享文案
@@ -766,22 +928,20 @@
 
             el.innerHTML = data.tokens.map(t => {
                 const badge   = t.expired
-                    ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
-                    : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
-                const expStr  = new Date(t.expires_at).toLocaleString();
-                const created = new Date(t.created_at).toLocaleDateString();
+                    ? '<span style="color:#ff4d4f;font-size:0.72rem;font-weight:500">已过期</span>'
+                    : '<span style="color:#52c41a;font-size:0.72rem;font-weight:500">有效</span>';
+                const expStr  = new Date(t.expires_at).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                const created = new Date(t.created_at).toLocaleDateString('zh-CN', {month:'numeric',day:'numeric'});
                 const shareLink = `${window.location.origin}/?code=${t.token}`;
                 const shareText = `${myName}给你分享了自己的课程表，点击链接查看：${shareLink}`;
-                return `<div class="token-row">
-                    <code style="font-size:1rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
-                    <span style="font-size:0.8rem;color:#999">第${t.week_from}~${t.week_to}周</span>
-                    <span style="font-size:0.8rem;color:#999">创建 ${created}</span>
-                    <span style="font-size:0.8rem;color:#999">至 ${expStr}</span>
-                    ${badge}
-                    <button class="btn btn-primary" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="copyShareText('${esc(shareText)}')">分享</button>
-                    <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                return `<div class="token-row" style="flex-direction:column;align-items:stretch;gap:6px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <code style="font-size:1rem;letter-spacing:3px;font-weight:700;flex:1">${esc(t.token)}</code>
+                        ${badge}
+                        <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
+                        <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--c-muted)">第 ${t.week_from}~${t.week_to} 周 · 创建 ${created} · 有效至 ${expStr}</div>
                 </div>`;
             }).join('');
         }
@@ -802,31 +962,29 @@
             const data = await resp.json();
             const el   = document.getElementById('admin-share-list');
             if (!data.tokens || data.tokens.length === 0) {
-                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无分享码</div>';
+                el.innerHTML = '<div class="empty-hint">暂无分享码</div>';
                 return;
             }
             el.innerHTML = data.tokens.map(t => {
                 const badge   = t.expired
-                    ? '<span style="color:#ff4d4f;font-size:0.75rem">已过期</span>'
-                    : '<span style="color:#52c41a;font-size:0.75rem">有效</span>';
-                const expStr  = new Date(t.expires_at).toLocaleString();
-                const created = new Date(t.created_at).toLocaleDateString();
+                    ? '<span style="color:#ff4d4f;font-size:0.72rem;font-weight:500">已过期</span>'
+                    : '<span style="color:#52c41a;font-size:0.72rem;font-weight:500">有效</span>';
+                const expStr  = new Date(t.expires_at).toLocaleString('zh-CN', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                const created = new Date(t.created_at).toLocaleDateString('zh-CN', {month:'numeric',day:'numeric'});
                 const days    = Math.round((new Date(t.expires_at) - new Date(t.created_at)) / 86400000);
                 const durStr  = days >= 160 ? '半年' : `${days}天`;
                 const ownerName = t.owner_name || t.owner;
                 const shareLink = `${window.location.origin}/?code=${t.token}`;
                 const shareText = `${ownerName}给你分享了TA的课程表，点击链接查看：${shareLink}`;
-                return `<div class="token-row">
-                    <code style="font-size:0.95rem;letter-spacing:2px;font-weight:bold">${esc(t.token)}</code>
-                    <span style="font-size:0.82rem;color:#1890ff;font-weight:500">${esc(ownerName)}</span>
-                    <span style="font-size:0.78rem;color:#999">第${t.week_from}~${t.week_to}周</span>
-                    <span style="font-size:0.78rem;color:#999">${created} · ${durStr}</span>
-                    <span style="font-size:0.78rem;color:#999">至 ${expStr}</span>
-                    ${badge}
-                    <button class="btn btn-primary" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="copyShareText('${esc(shareText)}')">分享</button>
-                    <button class="btn btn-default" style="padding:3px 9px;font-size:0.78rem"
-                            onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                return `<div class="token-row" style="flex-direction:column;align-items:stretch;gap:6px">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                        <code style="font-size:0.95rem;letter-spacing:3px;font-weight:700;flex:1">${esc(t.token)}</code>
+                        <span style="color:var(--c-primary);font-size:0.8rem;font-weight:500">${esc(ownerName)}</span>
+                        ${badge}
+                        <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
+                        <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--c-muted)">第 ${t.week_from}~${t.week_to} 周 · ${created} 创建 · ${durStr} · 有效至 ${expStr}</div>
                 </div>`;
             }).join('');
         }
@@ -889,7 +1047,7 @@
             adminUsersList = data.users || [];
             const el = document.getElementById('users-list');
             if (!adminUsersList.length) {
-                el.innerHTML = '<div style="color:#aaa;font-size:0.82rem">暂无用户</div>';
+                el.innerHTML = '<div class="empty-hint">暂无用户</div>';
                 return;
             }
 
@@ -916,7 +1074,7 @@
                     const adminLabel = u.is_admin ? '<span style="color:#cf1322;font-size:0.75rem;margin-left:4px">[管理员]</span>' : '';
                     const groupBtn = u.is_admin
                         ? ''
-                        : `<button class="btn btn-default" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})" style="padding:2px 6px;font-size:0.72rem">设置组</button>`;
+                        : `<button class="btn btn-default btn-sm" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})">设置组</button>`;
                     return `<div class="user-row">
                         <div class="user-row-head">
                             <span><strong>${esc(u.name)}</strong>
@@ -928,7 +1086,7 @@
                                 <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近活跃 ${loginStr}</span>
                             </span>
                         </div>
-                        <div class="week-chips">${chips || '<span style="color:#aaa;font-size:0.8rem">无缓存数据</span>'}</div>
+                        <div class="week-chips">${chips || '<span class="empty-hint" style="margin-top:4px">无缓存数据</span>'}</div>
                     </div>`;
                 }).join('');
 
@@ -983,8 +1141,8 @@
                         </span>
                     </span>
                     <span>
-                        <button class="btn btn-default" onclick="showGroupEditModal(${g.id})" style="padding:2px 8px;font-size:0.78rem">编辑</button>
-                        ${g.id > 2 ? `<button class="btn btn-default btn-danger" onclick="deleteGroup(${g.id})" style="padding:2px 8px;font-size:0.78rem;margin-left:4px">删除</button>` : ''}
+                        <button class="btn btn-default btn-sm" onclick="showGroupEditModal(${g.id})">编辑</button>
+                        ${g.id > 2 ? `<button class="btn btn-danger btn-sm" onclick="deleteGroup(${g.id})" style="margin-left:4px">删除</button>` : ''}
                     </span>
                 </div>
             `).join('');
@@ -1280,7 +1438,13 @@
         init();
     </script>
     <script>
-        if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+                reg.update();
+                if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+            });
+        }
     </script>
 </body>
 </html>

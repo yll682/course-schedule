@@ -1,10 +1,11 @@
-const CACHE = 'kechenbiao-v8';
+const CACHE = 'kechenbiao-v10';
 const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/style.css', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
     e.waitUntil(
-        caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
+        caches.open(CACHE).then(c => c.addAll(STATIC))
     );
+    self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
