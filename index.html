@@ -7,6 +7,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1890ff">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="stylesheet" href="/ibm-plex-sans-sc.css">
     <script>
         (function() {
             try {
@@ -14,9 +15,11 @@
                 if (saved) {
                     var theme = JSON.parse(saved);
                     var root = document.documentElement;
-                    root.style.setProperty('--c-primary', theme.primary);
-                    root.style.setProperty('--c-accent', theme.accent);
-                    root.style.setProperty('--c-course', theme.course);
+                    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    var colors = isDark ? theme.dark : theme.light;
+                    root.style.setProperty('--c-primary', colors.primary);
+                    root.style.setProperty('--c-accent', colors.accent);
+                    root.style.setProperty('--c-course', colors.course);
                 }
             } catch(e) {}
         })();
@@ -378,6 +381,17 @@
             const meta = document.getElementById('meta');
             if (!table || !meta) return;
 
+            // 等待字体加载完成
+            try {
+                await document.fonts.load('400 16px "IBM Plex Sans SC"');
+                await document.fonts.load('500 16px "IBM Plex Sans SC"');
+                await document.fonts.load('600 16px "IBM Plex Sans SC"');
+                await document.fonts.load('700 16px "IBM Plex Sans SC"');
+                await document.fonts.ready;
+            } catch (e) {
+                console.warn('字体加载失败，使用后备字体:', e);
+            }
+
             // 课程数据
             const coursesData = window._lastCoursesData;
             if (!coursesData) {
@@ -385,20 +399,17 @@
                 return;
             }
 
-            // 读取 CSS 变量（但背景强制白色，方便打印）
-            const computedStyle = getComputedStyle(document.documentElement);
-            const getColor = (varName, fallback) => computedStyle.getPropertyValue(varName).trim() || fallback;
-
+            // 读取 CSS 变量（但强制使用浅色模式配色，方便打印）
             const colors = {
-                bg: '#ffffff',  // 强制白色背景，方便打印
-                surface: getColor('--c-surface', '#ffffff'),
-                primary: getColor('--c-primary', '#1890ff'),
-                accent: getColor('--c-accent', '#1890ff'),
-                course: getColor('--c-course', '#e6f7ff'),
-                text: getColor('--c-text', '#333333'),
-                muted: getColor('--c-muted', '#999999'),
-                border: getColor('--c-grid', '#dddddd'),
-                subtle: getColor('--c-subtle', '#f0f0f0'),
+                bg: '#ffffff',  // 强制白色背景
+                surface: '#ffffff',
+                primary: '#1890ff',
+                accent: '#1890ff',
+                course: '#e6f7ff',
+                text: '#333333',
+                muted: '#999999',
+                border: '#dddddd',
+                subtle: '#f0f0f0',
             };
 
             // 检查周末是否有课
@@ -441,7 +452,7 @@
 
             // 标题
             ctx.fillStyle = colors.text;
-            ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            ctx.font = 'bold 16px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
             const title = coursesData.metadata ?
                 `${coursesData.metadata.用户} · ${coursesData.metadata.班级} · ${coursesData.metadata.周次}` :
@@ -495,7 +506,7 @@
 
             // 绘制"节次"单元格
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+            ctx.font = 'bold 13px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('节次', padding + timeColWidth / 2, padding + 30 + headerHeight / 2 + 5);
 
@@ -509,11 +520,11 @@
                 const dayData = coursesData.完整课表?.find(d => d.weekday === day);
                 const dateStr = dayData?.date ? dayData.date.slice(5) : '';
                 ctx.fillText(weekMap[day], x + cellWidth / 2, padding + 30 + headerHeight / 2 - 2);
-                ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.font = '11px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                 ctx.fillStyle = 'rgba(255,255,255,0.8)';
                 ctx.fillText(dateStr, x + cellWidth / 2, padding + 30 + headerHeight / 2 + 12);
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.font = 'bold 13px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
 
                 // 绘制星期单元格边框
                 ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -529,7 +540,7 @@
                 ctx.strokeRect(padding, y, timeColWidth, cellHeight);
 
                 ctx.fillStyle = colors.text;
-                ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.font = 'bold 12px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                 ctx.textAlign = 'center';
                 // 节次和时间上下居中：总高度约 28px（12px文字 + 6px间距 + 10px文字）
                 // 节次号在上方，时间在下方，中心对齐
@@ -537,8 +548,8 @@
                 const totalTextHeight = 12 + lineGap + 10;
                 const startY = y + (cellHeight - totalTextHeight) / 2;
                 ctx.fillText(`${slot}`, padding + timeColWidth / 2, startY + 12);
-                ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
-                ctx.fillStyle = colors.muted;
+                ctx.font = '10px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                ctx.fillStyle = '#666666'; // 使用较深的颜色以保证打印清晰度
                 ctx.fillText(times[slot], padding + timeColWidth / 2, startY + 12 + lineGap + 10);
             }
 
@@ -594,7 +605,7 @@
 
                         // 课程文字
                         ctx.fillStyle = colors.text;
-                        ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                        ctx.font = 'bold 11px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                         ctx.textAlign = 'left';
 
                         const maxWidth = cellWidth - margin * 2 - 6;
@@ -611,8 +622,9 @@
                         });
                         textY += nameLinesToShow.length * lineHeight + 2;
 
-                        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
-                        ctx.fillStyle = colors.muted;
+                        ctx.font = '10px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                        // 使用更深的颜色以保证打印清晰度
+                        ctx.fillStyle = '#555555';
 
                         // 地点
                         const location = course.location || '';
@@ -1291,6 +1303,22 @@
                     if (!importMode && !adminViewMode) loadCourses();
                 }, refreshInterval);
             }
+
+            // 监听系统色彩模式变化
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                const saved = localStorage.getItem('schedule_theme_color');
+                if (saved) {
+                    try {
+                        const theme = JSON.parse(saved);
+                        const root = document.documentElement;
+                        const isDark = e.matches;
+                        const colors = isDark ? theme.dark : theme.light;
+                        root.style.setProperty('--c-primary', colors.primary);
+                        root.style.setProperty('--c-accent', colors.accent);
+                        root.style.setProperty('--c-course', colors.course);
+                    } catch (_) {}
+                }
+            });
         }
         init();
     </script>

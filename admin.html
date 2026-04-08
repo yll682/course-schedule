@@ -7,6 +7,7 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1890ff">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="stylesheet" href="/ibm-plex-sans-sc.css">
     <script>
         (function() {
             try {
@@ -14,9 +15,11 @@
                 if (saved) {
                     var theme = JSON.parse(saved);
                     var root = document.documentElement;
-                    root.style.setProperty('--c-primary', theme.primary);
-                    root.style.setProperty('--c-accent', theme.accent);
-                    root.style.setProperty('--c-course', theme.course);
+                    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    var colors = isDark ? theme.dark : theme.light;
+                    root.style.setProperty('--c-primary', colors.primary);
+                    root.style.setProperty('--c-accent', colors.accent);
+                    root.style.setProperty('--c-course', colors.course);
                 }
             } catch(e) {}
         })();
@@ -357,14 +360,46 @@
         const THEME_COLOR_KEY = 'schedule_theme_color';
 
         const THEME_COLORS = [
-            { name: '默认蓝', primary: '#1890ff', accent: '#1890ff', course: '#e6f7ff' },
-            { name: '青色', primary: '#00b96b', accent: '#00b96b', course: '#e6fff0' },
-            { name: '紫色', primary: '#722ed1', accent: '#722ed1', course: '#f0e6ff' },
-            { name: '橙色', primary: '#fa8c16', accent: '#fa8c16', course: '#fff4e6' },
-            { name: '粉色', primary: '#eb2f96', accent: '#eb2f96', course: '#ffe6f0' },
-            { name: '深蓝', primary: '#2f54eb', accent: '#2f54eb', course: '#e6f0ff' },
-            { name: '青绿', primary: '#13c2c2', accent: '#13c2c2', course: '#e6ffff' },
-            { name: '金色', primary: '#d4b106', accent: '#d4b106', course: '#fffbe6' },
+            {
+                name: '默认蓝',
+                light: { primary: '#1890ff', accent: '#1890ff', course: '#e6f7ff' },
+                dark: { primary: '#0d5aa7', accent: '#40a9ff', course: '#1a3a4a' }
+            },
+            {
+                name: '青色',
+                light: { primary: '#00b96b', accent: '#00b96b', course: '#e6fff0' },
+                dark: { primary: '#007a47', accent: '#36c761', course: '#0a3d21' }
+            },
+            {
+                name: '紫色',
+                light: { primary: '#722ed1', accent: '#722ed1', course: '#f0e6ff' },
+                dark: { primary: '#531dab', accent: '#9254de', course: '#2a1a4a' }
+            },
+            {
+                name: '橙色',
+                light: { primary: '#fa8c16', accent: '#fa8c16', course: '#fff4e6' },
+                dark: { primary: '#ad4e00', accent: '#ff9c2e', course: '#4a2a0a' }
+            },
+            {
+                name: '粉色',
+                light: { primary: '#eb2f96', accent: '#eb2f96', course: '#ffe6f0' },
+                dark: { primary: '#a61d55', accent: '#f759ab', course: '#4a1a2f' }
+            },
+            {
+                name: '深蓝',
+                light: { primary: '#2f54eb', accent: '#2f54eb', course: '#e6f0ff' },
+                dark: { primary: '#1d39c4', accent: '#597ef7', course: '#1a2a4a' }
+            },
+            {
+                name: '青绿',
+                light: { primary: '#13c2c2', accent: '#13c2c2', course: '#e6ffff' },
+                dark: { primary: '#006d75', accent: '#36cfc9', course: '#0a3d3d' }
+            },
+            {
+                name: '金色',
+                light: { primary: '#d4b106', accent: '#d4b106', course: '#fffbe6' },
+                dark: { primary: '#876800', accent: '#fadb14', course: '#4a4000' }
+            },
         ];
 
         // ── CSRF Token 管理 ───────────────────────────────────────────────────────
@@ -487,9 +522,11 @@
             const saved = readLocalPreference(THEME_COLOR_KEY, '');
 
             container.innerHTML = THEME_COLORS.map((t, i) => {
-                const isSelected = saved ? (JSON.parse(saved).primary === t.primary) : (i === 0);
+                const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const colors = isDark ? t.dark : t.light;
+                const isSelected = saved ? (JSON.parse(saved).light.primary === t.light.primary) : (i === 0);
                 return `<div class="theme-color-item ${isSelected ? 'selected' : ''}"
-                             style="background:${t.primary};width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid ${isSelected ? t.primary : 'transparent'};box-shadow:${isSelected ? `0 0 0 2px var(--c-surface), 0 0 0 4px ${t.primary}` : 'none'};transition:all 0.2s"
+                             style="background:${colors.primary};width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid ${isSelected ? colors.primary : 'transparent'};box-shadow:${isSelected ? `0 0 0 2px var(--c-surface), 0 0 0 4px ${colors.primary}` : 'none'};transition:all 0.2s"
                              onclick="selectThemeColor(${i})"
                              title="${t.name}">
                             ${isSelected ? '<span style="color:white;font-size:14px;line-height:26px">✓</span>' : ''}
@@ -506,11 +543,14 @@
 
         function applyThemeColor(theme) {
             const root = document.documentElement;
-            root.style.setProperty('--c-primary', theme.primary);
-            root.style.setProperty('--c-accent', theme.accent);
-            root.style.setProperty('--c-course', theme.course);
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const colors = isDark ? theme.dark : theme.light;
+
+            root.style.setProperty('--c-primary', colors.primary);
+            root.style.setProperty('--c-accent', colors.accent);
+            root.style.setProperty('--c-course', colors.course);
             // 更新meta标签
-            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme.primary);
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors.primary);
         }
 
         function saveAdvancedOptions() {
@@ -560,6 +600,18 @@
             loadAdvancedOptions();
             loadIcsSubscription();
             loadShares();
+
+            // 监听系统色彩模式变化
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                const saved = readLocalPreference(THEME_COLOR_KEY, '');
+                if (saved) {
+                    try {
+                        const theme = JSON.parse(saved);
+                        applyThemeColor(theme);
+                        loadThemeColors();
+                    } catch (_) {}
+                }
+            });
         }
 
         async function saveAdminSettings() {
