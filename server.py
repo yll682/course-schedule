@@ -131,8 +131,8 @@ def set_security_headers(response):
         "script-src 'self' 'unsafe-inline'; "  # unsafe-inline 用于内联脚本，如果可能应该使用 nonce
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
-        "font-src 'self' data:; "
-        "connect-src 'self'; "
+        "font-src 'self' data: https://font.rainlodyn.cn; "
+        "connect-src 'self' https://font.rainlodyn.cn; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
         "form-action 'self';"
