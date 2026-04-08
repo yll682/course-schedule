@@ -1351,9 +1351,21 @@
                                 const optimalSize = calculateOptimalFontSize(locationText, availableWidth, showEmoji, '📍');
 
                                 // 判断是否应该在同一行：
-                                // 1. 在最大字号下能放下，或者
-                                // 2. 计算出的字号大于最小字号（说明通过缩小字号能放下）
-                                if (maxWidthTextWidth <= availableWidth || optimalSize > minSize) {
+                                // 检查在最小字号下是否能放下（如果最小字号能放下，说明可以通过缩小字号来适配）
+                                const minSpan = document.createElement('span');
+                                minSpan.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${minSize}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                minSpan.textContent = '📍 ' + locationText;
+                                document.body.appendChild(minSpan);
+                                const minWidthTextWidth = minSpan.offsetWidth;
+                                document.body.removeChild(minSpan);
+
+                                if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
                                     return `<div class="course-info" style="font-size:${optimalSize}rem">📍 ${esc(locationText)}</div>`;
                                 } else {
@@ -1391,9 +1403,21 @@
                                 const optimalSize = calculateOptimalFontSize(timeDisplayText, availableWidth, showEmoji, '⏰');
 
                                 // 判断是否应该在同一行：
-                                // 1. 在最大字号下能放下，或者
-                                // 2. 计算出的字号大于最小字号（说明通过缩小字号能放下）
-                                if (maxWidthTextWidth <= availableWidth || optimalSize > minSize) {
+                                // 检查在最小字号下是否能放下
+                                const minSpan = document.createElement('span');
+                                minSpan.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${minSize}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                minSpan.textContent = '⏰ ' + timeDisplayText;
+                                document.body.appendChild(minSpan);
+                                const minWidthTextWidth = minSpan.offsetWidth;
+                                document.body.removeChild(minSpan);
+
+                                if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
                                     return `<div class="course-info" style="font-size:${optimalSize}rem">⏰ ${esc(timeDisplayText)}</div>`;
                                 } else {
@@ -1431,9 +1455,21 @@
                                 const optimalSize = calculateOptimalFontSize(teacherText, availableWidth, showEmoji, '👨‍🏫');
 
                                 // 判断是否应该在同一行：
-                                // 1. 在最大字号下能放下，或者
-                                // 2. 计算出的字号大于最小字号（说明通过缩小字号能放下）
-                                if (maxWidthTextWidth <= availableWidth || optimalSize > minSize) {
+                                // 检查在最小字号下是否能放下
+                                const minSpan = document.createElement('span');
+                                minSpan.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${minSize}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                minSpan.textContent = '👨‍🏫 ' + teacherText;
+                                document.body.appendChild(minSpan);
+                                const minWidthTextWidth = minSpan.offsetWidth;
+                                document.body.removeChild(minSpan);
+
+                                if (minWidthTextWidth <= availableWidth) {
                                     // emoji和文本在同一行
                                     return `<div class="course-info" style="font-size:${optimalSize}rem">👨‍🏫 ${esc(teacherText)}</div>`;
                                 } else {
