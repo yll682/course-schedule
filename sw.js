@@ -1,4 +1,4 @@
-const CACHE = 'kechenbiao-v11';
+const CACHE = 'kechenbiao-v12';
 const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/style.css', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', e => {
@@ -24,7 +24,12 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // 所有资源（包括外部字体）：网络优先，失败时回退缓存
+    // 只缓存同源资源，外部字体等由浏览器 HTTP 缓存处理
+    if (url.origin !== location.origin) {
+        return;
+    }
+
+    // 同源资源：网络优先，失败时回退缓存
     e.respondWith(
         fetch(e.request)
             .then(resp => {
