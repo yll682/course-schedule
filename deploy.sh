@@ -47,17 +47,19 @@ main_menu() {
     echo -e "  当前状态：$status_line"
     echo ""
     echo -e "  ${BOLD}1)${NC} 安装 / 更新"
-    echo -e "  ${BOLD}2)${NC} 卸载"
-    echo -e "  ${BOLD}3)${NC} 退出"
+    echo -e "  ${BOLD}2)${NC} 重启服务"
+    echo -e "  ${BOLD}3)${NC} 卸载"
+    echo -e "  ${BOLD}4)${NC} 退出"
     echo ""
-    echo -en "${BOLD}请选择 [1-3]：${NC} "
+    echo -en "${BOLD}请选择 [1-4]：${NC} "
     read -r choice
     echo ""
 
     case "$choice" in
         1) do_install ;;
-        2) do_uninstall ;;
-        3) exit 0 ;;
+        2) do_restart ;;
+        3) do_uninstall ;;
+        4) exit 0 ;;
         *) die "无效选项：$choice" ;;
     esac
 }
@@ -96,6 +98,31 @@ do_install() {
     patch_env
     setup_systemd
     print_done
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# 重启服务
+# ─────────────────────────────────────────────────────────────────────
+do_restart() {
+    if ! systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+        die "服务未安装"
+    fi
+
+    info "重启服务..."
+    systemctl restart "$SERVICE_NAME"
+    sleep 2
+
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+        ok "服务已重启"
+        local port; port=$(grep "^PORT=" "$APP_DIR/.env" 2>/dev/null | cut -d= -f2 || echo "?")
+        echo ""
+        echo -e "  本机地址：${CYAN}http://127.0.0.1:${port}${NC}"
+        local ip; ip=$(hostname -I | awk '{print $1}')
+        echo -e "  内网地址：${CYAN}http://${ip}:${port}${NC}"
+    else
+        journalctl -u "$SERVICE_NAME" -n 20 --no-pager
+        die "服务重启失败，日志见上"
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────
