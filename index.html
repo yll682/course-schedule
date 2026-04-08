@@ -399,13 +399,31 @@
                 return;
             }
 
-            // 读取 CSS 变量（但强制使用浅色模式配色，方便打印）
+            // 读取主题色（始终使用浅色模式配色，方便打印）
+            let themePrimary = '#1890ff';
+            let themeAccent = '#1890ff';
+            let themeCourse = '#e6f7ff';
+
+            try {
+                const saved = localStorage.getItem('schedule_theme_color');
+                if (saved) {
+                    const theme = JSON.parse(saved);
+                    if (theme.light) {
+                        themePrimary = theme.light.primary || themePrimary;
+                        themeAccent = theme.light.accent || themeAccent;
+                        themeCourse = theme.light.course || themeCourse;
+                    }
+                }
+            } catch (e) {
+                console.warn('读取主题色失败，使用默认配色:', e);
+            }
+
             const colors = {
                 bg: '#ffffff',  // 强制白色背景
                 surface: '#ffffff',
-                primary: '#1890ff',
-                accent: '#1890ff',
-                course: '#e6f7ff',
+                primary: themePrimary,
+                accent: themeAccent,
+                course: themeCourse,
                 text: '#333333',
                 muted: '#999999',
                 border: '#dddddd',
