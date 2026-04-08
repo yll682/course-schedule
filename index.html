@@ -1392,14 +1392,14 @@
                         // 时间显示逻辑
                         const timeDisplayText = courseTime || course.time_slots.display;
                         const timeHtml = showTime ? (() => {
-                            // 时间保持正常字号，在"-"后换行
+                            // 时间保持正常字号，在"-"后强制换行
                             if (showEmoji) {
-                                // emoji单独一行，时间文本在"-"后可换行
-                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
+                                // emoji单独一行，时间在"-"后换行
+                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<br/>');
                                 return `<div class="course-info">⏰<br/>${timeWithBreak}</div>`;
                             } else {
-                                // 不显示emoji，时间文本在"-"后可换行
-                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
+                                // 时间在"-"后换行
+                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<br/>');
                                 return `<div class="course-info">${timeWithBreak}</div>`;
                             }
                         })() : '';
