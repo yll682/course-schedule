@@ -99,7 +99,7 @@
         }
         .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.66rem, 1.8vw, 0.78rem); height: 100%; overflow: hidden; }
         .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
-        .course-info { opacity: 0.8; font-size: clamp(0.56rem, 1.4vw, 0.62rem); line-height: 1.4; word-wrap: break-word; }
+        .course-info { opacity: 0.8; font-size: clamp(0.56rem, 1.4vw, 0.62rem); line-height: 1.4; word-wrap: break-word; transition: font-size 0.1s ease; }
         .course { cursor: pointer; }
         .course:active { filter: brightness(0.93); }
         @media (max-width: 768px) {
@@ -637,7 +637,6 @@
 
                         const maxWidth = cellWidth - margin * 2 - 6;
                         const lineHeight = 13;
-                        const infoLineHeight = 11;
                         let textY = y + margin + 16;  // 增加顶部距离
 
                         // 绘制课程名（最多2行）
@@ -649,13 +648,36 @@
                         });
                         textY += nameLinesToShow.length * lineHeight + 2;
 
-                        ctx.font = '9px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+                        // 动态计算最优字号的函数（Canvas版本）
+                        const calculateOptimalFontSizeCanvas = (text, maxWidth, showEmoji, emojiChar = '') => {
+                            const minSize = 7;   // 最小字号（px），保证可读性
+                            const maxSize = 10;  // 最大字号（px），舒适阅读
+                            const sizeStep = 0.5; // 每次调整的步长
+
+                            // 从最大字号开始尝试
+                            for (let size = maxSize; size >= minSize; size -= sizeStep) {
+                                ctx.font = `${size}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
+                                const fullText = showEmoji && emojiChar ? `${emojiChar} ${text}` : text;
+                                const textWidth = ctx.measureText(fullText).width;
+
+                                if (textWidth <= maxWidth) {
+                                    return size;
+                                }
+                            }
+
+                            return minSize;
+                        };
+
                         // 使用更深的颜色以保证打印清晰度
                         ctx.fillStyle = '#555555';
 
                         // 地点
                         const location = course.location || '';
                         if (location) {
+                            const optimalSize = calculateOptimalFontSizeCanvas(location, maxWidth, showEmoji, '📍');
+                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
+                            const infoLineHeight = optimalSize + 2;
+
                             if (showEmoji) {
                                 const locationText = '📍 ' + location;
                                 const textWidth = ctx.measureText(locationText).width;
@@ -690,6 +712,9 @@
                         if (showTime) {
                             const courseTime = getCourseTime(course.time_slots.start_slot, course.time_slots.duration, course.location);
                             const timeStr = courseTime || course.time_slots?.display || times[slot];
+                            const optimalSize = calculateOptimalFontSizeCanvas(timeStr, maxWidth, showEmoji, '⏰');
+                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
+                            const infoLineHeight = optimalSize + 2;
 
                             if (showEmoji) {
                                 const timeText = '⏰ ' + timeStr;
@@ -724,6 +749,10 @@
                         // 教师（最多2行）
                         const teacher = course.teacher || '';
                         if (teacher) {
+                            const optimalSize = calculateOptimalFontSizeCanvas(teacher, maxWidth, showEmoji, '👨‍🏫');
+                            ctx.font = `${optimalSize}px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif`;
+                            const infoLineHeight = optimalSize + 2;
+
                             if (showEmoji) {
                                 const teacherText = '👨‍🏫 ' + teacher;
                                 const teacherLines = wrapText(ctx, teacherText, maxWidth);
@@ -1281,22 +1310,37 @@
                             }
                         })();
 
-                        // 测量文本宽度的辅助函数
-                        const measureTextWidth = (text) => {
-                            // 创建临时元素测量宽度
-                            const span = document.createElement('span');
-                            span.style.cssText = `
-                                position: absolute;
-                                visibility: hidden;
-                                white-space: nowrap;
-                                font-size: clamp(0.56rem, 1.4vw, 0.62rem);
-                                font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-                            `;
-                            span.textContent = text;
-                            document.body.appendChild(span);
-                            const width = span.offsetWidth;
-                            document.body.removeChild(span);
-                            return width;
+                        // 动态计算最优字号的函数
+                        const calculateOptimalFontSize = (text, availableWidth, showEmoji, emojiChar = '') => {
+                            // 字号范围（单位：rem）
+                            const minSize = 0.52;  // 最小字号，保证可读性
+                            const maxSize = 0.68;  // 最大字号，舒适阅读
+                            const sizeStep = 0.02; // 每次调整的步长
+
+                            // 从最大字号开始尝试
+                            for (let size = maxSize; size >= minSize; size -= sizeStep) {
+                                const span = document.createElement('span');
+                                span.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${size}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                // 如果显示emoji，测量emoji+文本的宽度
+                                span.textContent = showEmoji && emojiChar ? `${emojiChar} ${text}` : text;
+                                document.body.appendChild(span);
+                                const width = span.offsetWidth;
+                                document.body.removeChild(span);
+
+                                // 如果当前字号能放下，返回这个字号
+                                if (width <= availableWidth) {
+                                    return size;
+                                }
+                            }
+
+                            // 如果最小字号都放不下，返回最小字号
+                            return minSize;
                         };
 
                         // 获取课程卡片可用宽度
@@ -1315,48 +1359,81 @@
                         // 地点显示逻辑
                         const locationText = course.location || '';
                         const locationHtml = showLocation && locationText ? (() => {
+                            // 计算最优字号
+                            const optimalSize = calculateOptimalFontSize(locationText, availableWidth, showEmoji, '📍');
+
                             if (showEmoji) {
-                                const textWithEmoji = '📍 ' + locationText;
-                                const textWidth = measureTextWidth(textWithEmoji);
+                                // 测量emoji+文本的宽度
+                                const tempSpan = document.createElement('span');
+                                tempSpan.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${optimalSize}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                tempSpan.textContent = '📍 ' + locationText;
+                                document.body.appendChild(tempSpan);
+                                const textWidth = tempSpan.offsetWidth;
+                                document.body.removeChild(tempSpan);
+
                                 if (textWidth > availableWidth) {
                                     // 文本过长：emoji单独一行，文本自动换行
-                                    return `<div class="course-info">📍<br/>${esc(locationText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem">📍<br/>${esc(locationText)}</div>`;
                                 } else {
                                     // 文本不长：emoji和文本在同一行
-                                    return `<div class="course-info">📍 ${esc(locationText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem">📍 ${esc(locationText)}</div>`;
                                 }
                             } else {
                                 // 不显示emoji，只显示文本
-                                return `<div class="course-info">${esc(locationText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(locationText)}</div>`;
                             }
                         })() : '';
 
                         // 时间显示逻辑
                         const timeDisplayText = courseTime || course.time_slots.display;
                         const timeHtml = showTime ? (() => {
+                            // 计算最优字号
+                            const optimalSize = calculateOptimalFontSize(timeDisplayText, availableWidth, showEmoji, '⏰');
+
                             if (showEmoji) {
-                                const textWithEmoji = '⏰ ' + timeDisplayText;
-                                const textWidth = measureTextWidth(textWithEmoji);
+                                // 测量emoji+文本的宽度
+                                const tempSpan = document.createElement('span');
+                                tempSpan.style.cssText = `
+                                    position: absolute;
+                                    visibility: hidden;
+                                    white-space: nowrap;
+                                    font-size: ${optimalSize}rem;
+                                    font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                                `;
+                                tempSpan.textContent = '⏰ ' + timeDisplayText;
+                                document.body.appendChild(tempSpan);
+                                const textWidth = tempSpan.offsetWidth;
+                                document.body.removeChild(tempSpan);
+
                                 if (textWidth > availableWidth) {
                                     // 文本过长：emoji单独一行，文本自动换行
-                                    return `<div class="course-info">⏰<br/>${esc(timeDisplayText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem">⏰<br/>${esc(timeDisplayText)}</div>`;
                                 } else {
                                     // 文本不长：emoji和文本在同一行
-                                    return `<div class="course-info">⏰ ${esc(timeDisplayText)}</div>`;
+                                    return `<div class="course-info" style="font-size:${optimalSize}rem">⏰ ${esc(timeDisplayText)}</div>`;
                                 }
                             } else {
                                 // 不显示emoji，只显示文本
-                                return `<div class="course-info">${esc(timeDisplayText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(timeDisplayText)}</div>`;
                             }
                         })() : '';
 
                         // 教师显示逻辑
                         const teacherText = course.teacher || '';
                         const teacherHtml = teacherText ? (() => {
+                            // 计算最优字号
+                            const optimalSize = calculateOptimalFontSize(teacherText, availableWidth, showEmoji, '👨‍🏫');
+
                             if (showEmoji) {
-                                return `<div class="course-info">👨‍🏫 ${esc(teacherText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem">👨‍🏫 ${esc(teacherText)}</div>`;
                             } else {
-                                return `<div class="course-info">${esc(teacherText)}</div>`;
+                                return `<div class="course-info" style="font-size:${optimalSize}rem">${esc(teacherText)}</div>`;
                             }
                         })() : '';
 
