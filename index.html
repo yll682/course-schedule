@@ -1412,9 +1412,9 @@
                                 // 能放下，一行显示
                                 return `<div class="course-info" style="white-space:nowrap">${showEmoji ? '⏰ ' : ''}${timeDisplayText}</div>`;
                             } else {
-                                // 放不下，emoji单独一行，时间在"-"后可换行
+                                // 放不下，在"-"后可自然换行（emoji和时间在一起）
                                 const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
-                                return `<div class="course-info">${showEmoji ? '⏰<br/>' : ''}${timeWithBreak}</div>`;
+                                return `<div class="course-info">${showEmoji ? '⏰ ' : ''}${timeWithBreak}</div>`;
                             }
                         })() : '';
 
