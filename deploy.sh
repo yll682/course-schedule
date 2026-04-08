@@ -108,6 +108,9 @@ do_restart() {
         die "服务未安装"
     fi
 
+    # 检查并修复 sudoers 配置
+    setup_sudoers
+
     info "重启服务..."
     systemctl restart "$SERVICE_NAME"
     sleep 2
@@ -238,6 +241,47 @@ EOF
 }
 
 
+setup_sudoers() {
+    # 配置 sudoers 允许 courseapp 无密码重启服务
+    local sudoers_file="/etc/sudoers.d/${SERVICE_NAME}-restart"
+    local expected_content="${APP_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ${SERVICE_NAME}"
+
+    # 检查文件是否存在且内容正确
+    if [[ -f "$sudoers_file" ]]; then
+        local current_content
+        current_content=$(cat "$sudoers_file" 2>/dev/null || true)
+
+        if [[ "$current_content" == "$expected_content" ]]; then
+            # 内容正确，检查权限
+            local current_perms
+            current_perms=$(stat -c %a "$sudoers_file" 2>/dev/null || stat -f %Lp "$sudoers_file" 2>/dev/null || echo "???")
+
+            if [[ "$current_perms" == "440" ]]; then
+                ok "sudoers 配置正确（权限已设置）"
+                return 0
+            else
+                info "修复 sudoers 文件权限..."
+                chmod 440 "$sudoers_file"
+                ok "sudoers 文件权限已修复"
+                return 0
+            fi
+        fi
+    fi
+
+    # 文件不存在或内容不正确，重新创建
+    info "配置 sudoers 权限..."
+    echo "$expected_content" > "$sudoers_file"
+    chmod 440 "$sudoers_file"
+
+    # 验证创建成功
+    if [[ -f "$sudoers_file" ]]; then
+        ok "sudoers 配置已创建（允许 $APP_USER 无密码重启服务）"
+    else
+        warn "sudoers 配置创建失败，在线重启功能可能不可用"
+    fi
+}
+
+
 setup_systemd() {
     # ── 数据目录迁移（兼容旧版本）──────────────────────────────
     local old_db="$APP_DIR/courses.db"
@@ -272,9 +316,7 @@ setup_systemd() {
     chown "$APP_USER:$APP_USER" "$APP_DIR/.env"
 
     # 配置 sudoers 允许 courseapp 重启服务
-    local sudoers_file="/etc/sudoers.d/${SERVICE_NAME}-restart"
-    echo "${APP_USER} ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart ${SERVICE_NAME}" > "$sudoers_file"
-    chmod 440 "$sudoers_file"
+    setup_sudoers
 
     systemctl daemon-reload
     systemctl enable --quiet "$SERVICE_NAME"
