@@ -349,7 +349,7 @@
             <div class="card-body">
                 <div class="btn-group">
                     <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出课表</button>
-                    <button class="btn btn-default" onclick="clearLocalCache()">清空缓存</button>
+                    <button class="btn btn-default" onclick="clearLocalCache()">清空缓存（出现问题点这）</button>
                 </div>
                 <div style="margin-top:8px">
                     <button class="btn btn-danger" onclick="doLogout()">退出登录</button>
@@ -878,42 +878,101 @@
         }
 
         async function restartService() {
-            if (!confirm('确定要重启服务吗？这会中断所有用户会话。')) return;
+            if (!confirm('确定要重启服务吗？\n\n重启期间（约5-10秒）所有用户将无法访问。')) return;
+
             const btn = document.getElementById('restart-btn');
-            btn.disabled = true; btn.textContent = '重启中…';
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '重启中…';
+
             try {
                 const resp = await safeFetch('/api/admin/restart', {
                     method: 'POST',
                 });
                 const data = await resp.json();
+
                 if (data.success) {
-                    alert(data.message);
-                    // 服务重启后页面会断开连接
+                    // 成功发送重启命令
+                    alert('✓ ' + data.message + '\n\n请稍后刷新页面查看服务状态。');
+
+                    // 10秒后自动检测服务是否恢复
+                    setTimeout(async () => {
+                        try {
+                            const checkResp = await fetch('/api/user');
+                            if (checkResp.ok) {
+                                alert('✓ 服务已恢复运行');
+                                location.reload();
+                            }
+                        } catch (e) {
+                            // 服务还在重启中
+                        }
+                    }, 10000);
                 } else {
-                    alert(data.message || '重启失败');
-                    btn.disabled = false; btn.textContent = '重启服务';
+                    // 失败：显示详细错误和建议
+                    alert('✗ ' + data.message + '\n\n如果问题持续，请使用"清空缓存"功能或联系管理员。');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
                 }
             } catch (e) {
-                // 重启成功时连接会断开，这里会报错，这是正常的
-                alert('服务已重启，请刷新页面');
+                // 重启成功时连接会断开，这是正常的
+                console.log('连接断开（服务正在重启）:', e);
+                alert('服务正在重启，请稍后刷新页面。');
+
+                // 5秒后尝试重新连接
+                setTimeout(() => {
+                    location.reload();
+                }, 5000);
             }
         }
 
         async function clearLocalCache() {
-            // 清除 Service Worker 缓存
-            if ('caches' in window) {
-                const keys = await caches.keys();
-                await Promise.all(keys.map(k => caches.delete(k)));
+            const confirmed = confirm('将清空所有本地缓存数据（包括主题设置、显示偏好等），页面将重新加载。\n\n确定要继续吗？');
+            if (!confirmed) return;
+
+            try {
+                // 1. 清除所有 Storage
+                localStorage.clear();
+                sessionStorage.clear();
+
+                // 2. 清除 Service Worker 缓存
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                }
+
+                // 3. 注销所有 Service Worker
+                if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map(r => r.unregister()));
+                }
+
+                // 4. 清除 IndexedDB（如果有）
+                if ('indexedDB' in window) {
+                    const dbs = await indexedDB.databases();
+                    await Promise.all(dbs.map(db => {
+                        if (db.name) {
+                            return new Promise((resolve, reject) => {
+                                const request = indexedDB.deleteDatabase(db.name);
+                                request.onsuccess = resolve;
+                                request.onerror = reject;
+                            });
+                        }
+                    }));
+                }
+
+                // 5. 强制完全重新加载（绕过缓存）
+                const el = document.getElementById('cache-clear-status');
+                el.textContent = '✓ 缓存已清空，正在重新加载...';
+                el.style.display = 'block';
+
+                // 使用 location.replace 强制重新加载，绕过浏览器缓存
+                setTimeout(() => {
+                    window.location.replace(window.location.href + '?nocache=' + Date.now());
+                }, 800);
+            } catch (e) {
+                console.error('Clear cache error:', e);
+                alert('清空缓存时出现错误: ' + e.message);
             }
-            // 注销 Service Worker
-            if ('serviceWorker' in navigator) {
-                const regs = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(regs.map(r => r.unregister()));
-            }
-            const el = document.getElementById('cache-clear-status');
-            el.textContent = '✓ 本地缓存已清空，页面将刷新';
-            el.style.display = 'block';
-            setTimeout(() => location.reload(true), 800);
         }
 
         async function doLogout() {

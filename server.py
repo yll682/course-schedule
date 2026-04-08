@@ -432,12 +432,18 @@ def static_files(path):
     if filename in _BLOCKED or ext in _BLOCKED_EXTS:
         return jsonify({'error': 'Not found'}), 404
 
-    if path == 'sw.js' or path.endswith('.html'):
-        response = send_from_directory('.', safe_path)
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        return response
+    response = send_from_directory('.', safe_path)
 
-    return send_from_directory('.', safe_path)
+    # HTML 和 JS 文件不缓存，确保用户始终获取最新版本
+    if path == 'sw.js' or path.endswith('.html') or path.endswith('.js'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    # CSS、图片、字体等资源缓存 1 小时，Service Worker 更新时会清除旧缓存
+    elif ext in ['.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.woff', '.woff2', '.ttf', '.eot']:
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+
+    return response
 
 
 # ── CSRF Token API ─────────────────────────────────────────────────────────────
@@ -1224,26 +1230,111 @@ def admin_restart():
     if 'username' not in session or not session.get('is_admin'):
         return jsonify({'error': '无权限'}), 403
 
-    try:
-        # 使用 systemctl restart 重启服务
-        # 注意：需要配置 sudoers 允许 courseapp 用户无密码执行此命令
-        result = subprocess.run(
-            ['sudo', 'systemctl', 'restart', 'course-schedule'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode != 0:
-            logger.error('重启服务失败: %s', result.stderr)
-            return jsonify({'success': False, 'message': f'重启失败: {result.stderr}'}), 500
+    # 检测运行环境
+    is_systemd = os.path.exists('/run/systemd/system')
+    service_name = 'course-schedule'
 
-        # 如果能执行到这里，说明重启命令已发送（但服务可能已在重启中）
-        return jsonify({'success': True, 'message': '重启命令已发送，服务将重新启动'})
+    try:
+        # 方案1: systemd 环境
+        if is_systemd:
+            # 获取当前运行用户
+            current_user = os.getenv('USER', 'unknown')
+            logger.info(f'重启服务请求 - 用户: {current_user}')
+
+            # 检查服务是否存在
+            check_result = subprocess.run(
+                ['systemctl', 'is-active', service_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            service_status = check_result.stdout.strip()
+            logger.info(f'服务状态检查: {service_status}, 返回码: {check_result.returncode}')
+
+            if check_result.returncode != 0:
+                return jsonify({
+                    'success': False,
+                    'message': f'服务未运行或不存在，当前状态：{service_status or "未知"}'
+                }), 400
+
+            # 检查 sudoers 配置
+            sudoers_file = f'/etc/sudoers.d/{service_name}-restart'
+            if not os.path.exists(sudoers_file):
+                logger.error(f'sudoers 文件不存在: {sudoers_file}')
+                return jsonify({
+                    'success': False,
+                    'message': f'缺少权限配置文件：{sudoers_file}\n请运行部署脚本修复'
+                }), 500
+
+            logger.info(f'sudoers 文件存在: {sudoers_file}')
+
+            # 尝试读取 sudoers 内容（调试用）
+            try:
+                with open(sudoers_file, 'r') as f:
+                    sudoers_content = f.read()
+                    logger.info(f'sudoers 内容: {sudoers_content.strip()}')
+            except Exception as e:
+                logger.warning(f'无法读取 sudoers 文件: {e}')
+
+            # 执行重启
+            logger.info('执行重启命令: sudo systemctl restart ' + service_name)
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'restart', service_name],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            logger.info(f'重启命令返回码: {result.returncode}')
+            logger.info(f'重启命令 stdout: {result.stdout}')
+            logger.info(f'重启命令 stderr: {result.stderr}')
+
+            if result.returncode != 0:
+                error_msg = result.stderr.strip()
+                logger.error('重启服务失败: %s', error_msg)
+
+                # 提供更友好的错误提示
+                if 'sudo: no tty present' in error_msg or 'password' in error_msg.lower():
+                    return jsonify({
+                        'success': False,
+                        'message': f'权限不足：当前用户 {current_user} 无法无密码执行重启命令\n'
+                                  f'请检查 sudoers 配置或手动运行: sudo systemctl restart {service_name}'
+                    }), 500
+
+                return jsonify({
+                    'success': False,
+                    'message': f'重启失败: {error_msg}\n\n详细信息请查看服务器日志'
+                }), 500
+
+            return jsonify({
+                'success': True,
+                'message': '重启命令已发送，服务将重新启动（约5-10秒）'
+            })
+
+        # 方案2: Docker 环境
+        elif os.path.exists('/.dockerenv'):
+            return jsonify({
+                'success': False,
+                'message': 'Docker 环境请使用: docker restart <容器名>'
+            }), 400
+
+        # 方案3: Windows 或其他环境
+        else:
+            return jsonify({
+                'success': False,
+                'message': '当前环境不支持在线重启，请手动重启服务（Windows: 重启进程；其他: 联系管理员）'
+            }), 400
+
     except subprocess.TimeoutExpired:
-        return jsonify({'success': False, 'message': '重启命令超时'}), 500
+        logger.error('重启命令超时')
+        return jsonify({'success': False, 'message': '重启命令超时（10秒无响应）'}), 500
+    except FileNotFoundError as e:
+        logger.error(f'系统命令不存在: {e.filename}')
+        return jsonify({'success': False, 'message': f'系统命令不存在: {e.filename}'}), 500
     except Exception as e:
-        logger.error('重启服务异常: %s', e)
-        return jsonify({'success': False, 'message': f'重启异常: {e}'}), 500
+        logger.error('重启服务异常: %s', e, exc_info=True)
+        return jsonify({'success': False, 'message': f'重启异常: {str(e)}'}), 500
 
 
 # ── ICS 日历订阅 ────────────────────────────────────────────────────────────────
