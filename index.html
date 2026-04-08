@@ -1284,7 +1284,7 @@
                         // 动态计算最优字号的函数
                         const calculateOptimalFontSize = (text, availableWidth, showEmoji, emojiChar = '') => {
                             // 字号范围（单位：rem）
-                            const minSize = 0.56;  // 最小字号（约9px），保证可读性
+                            const minSize = 0.5;   // 最小字号（约8px），小字号可读性极限
                             const maxSize = 0.68;  // 最大字号（约11px），舒适阅读
                             const sizeStep = 0.02; // 每次调整的步长
 
@@ -1333,7 +1333,7 @@
                             if (showEmoji) {
                                 // 先测量在最大字号下emoji+文本的宽度
                                 const maxSize = 0.68;
-                                const minSize = 0.56;
+                                const minSize = 0.5;
                                 const tempSpan = document.createElement('span');
                                 tempSpan.style.cssText = `
                                     position: absolute;
@@ -1385,7 +1385,7 @@
                             if (showEmoji) {
                                 // 先测量在最大字号下emoji+文本的宽度
                                 const maxSize = 0.68;
-                                const minSize = 0.56;
+                                const minSize = 0.5;
                                 const tempSpan = document.createElement('span');
                                 tempSpan.style.cssText = `
                                     position: absolute;
@@ -1437,7 +1437,7 @@
                             if (showEmoji) {
                                 // 先测量在最大字号下emoji+文本的宽度
                                 const maxSize = 0.68;
-                                const minSize = 0.56;
+                                const minSize = 0.5;
                                 const tempSpan = document.createElement('span');
                                 tempSpan.style.cssText = `
                                     position: absolute;
