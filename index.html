@@ -1392,15 +1392,29 @@
                         // 时间显示逻辑
                         const timeDisplayText = courseTime || course.time_slots.display;
                         const timeHtml = showTime ? (() => {
-                            // 时间保持正常字号，在"-"后强制换行
-                            if (showEmoji) {
-                                // emoji单独一行，时间在"-"后换行
-                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<br/>');
-                                return `<div class="course-info">⏰<br/>${timeWithBreak}</div>`;
+                            // 测量时间文本宽度
+                            const measureSpan = document.createElement('span');
+                            measureSpan.style.cssText = `
+                                position: absolute;
+                                visibility: hidden;
+                                white-space: nowrap;
+                                font-size: 0.62rem;
+                                font-family: "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+                            `;
+                            const fullText = showEmoji ? `⏰ ${timeDisplayText}` : timeDisplayText;
+                            measureSpan.textContent = fullText;
+                            document.body.appendChild(measureSpan);
+                            const textWidth = measureSpan.offsetWidth;
+                            document.body.removeChild(measureSpan);
+
+                            // 判断是否需要换行
+                            if (textWidth <= availableWidth) {
+                                // 能放下，一行显示
+                                return `<div class="course-info" style="white-space:nowrap">${showEmoji ? '⏰ ' : ''}${timeDisplayText}</div>`;
                             } else {
-                                // 时间在"-"后换行
-                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<br/>');
-                                return `<div class="course-info">${timeWithBreak}</div>`;
+                                // 放不下，emoji单独一行，时间在"-"后可换行
+                                const timeWithBreak = timeDisplayText.replace(/-/g, '-<wbr/>');
+                                return `<div class="course-info">${showEmoji ? '⏰<br/>' : ''}${timeWithBreak}</div>`;
                             }
                         })() : '';
 
