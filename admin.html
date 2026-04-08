@@ -291,6 +291,42 @@
             background: var(--c-primary); color: white;
             border-color: var(--c-primary);
         }
+
+        /* ── 分享码创建表单 ── */
+        .share-create-form {
+            display: flex; gap: 8px; align-items: flex-end;
+        }
+        .share-create-fields {
+            display: flex; gap: 8px; flex: 1; flex-wrap: wrap;
+        }
+        .share-create-btn {
+            white-space: nowrap; flex-shrink: 0; align-self: flex-end;
+        }
+        @media (max-width: 400px) {
+            .share-create-form { flex-wrap: wrap; }
+            .share-create-fields { flex-wrap: nowrap; }
+            .share-create-btn { width: 100%; justify-content: center; }
+        }
+
+        /* ── ICS 订阅链接行 ── */
+        .ics-url-row {
+            display: flex; align-items: center; gap: 8px;
+            flex-wrap: wrap; margin-bottom: 8px;
+        }
+        .ics-url-input {
+            flex: 1; min-width: 0;
+            padding: 7px 10px; font-size: 0.82rem;
+            border: 1px solid var(--c-border-input); border-radius: 8px;
+            background: var(--c-input); color: var(--c-text);
+        }
+        .ics-url-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+        /* ── 管理员按钮组 ── */
+        .admin-btn-group {
+            display: flex; align-items: center; gap: 8px;
+            flex-wrap: wrap; justify-content: space-between;
+        }
+        .admin-btn-group-left { display: flex; align-items: center; gap: 8px; }
     </style>
 </head>
 <body>
@@ -374,10 +410,12 @@
                                 </div>
                             </div>
                             <div id="ics-has-subscription" style="display:none">
-                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-                                    <input type="text" id="ics-url" readonly style="flex:1;min-width:180px;padding:7px 10px;font-size:0.82rem;border:1px solid var(--c-border-input);border-radius:8px;background:var(--c-input);color:var(--c-text)">
-                                    <button class="btn btn-default btn-sm" onclick="copyIcsUrl()">复制链接</button>
-                                    <button class="btn btn-danger btn-sm" onclick="revokeIcsSubscription()">撤销</button>
+                                <div class="ics-url-row">
+                                    <input type="text" id="ics-url" readonly class="ics-url-input">
+                                    <div class="ics-url-btns">
+                                        <button class="btn btn-default btn-sm" onclick="copyIcsUrl()">复制链接</button>
+                                        <button class="btn btn-danger btn-sm" onclick="revokeIcsSubscription()">撤销</button>
+                                    </div>
                                 </div>
                                 <div class="field hint">订阅创建时间：<span id="ics-created-at"></span></div>
                             </div>
@@ -395,25 +433,27 @@
             </div>
             <div class="card-body">
                 <!-- 创建 -->
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-                    <div class="field" style="margin:0;flex:2;min-width:100px">
-                        <label>有效期</label>
-                        <select id="share-expires">
-                            <option value="1d">1 天</option>
-                            <option value="7d" selected>7 天</option>
-                            <option value="30d">30 天</option>
-                            <option value="180d">半年</option>
-                        </select>
+                <div class="share-create-form">
+                    <div class="share-create-fields">
+                        <div class="field" style="margin:0;flex:2;min-width:90px">
+                            <label>有效期</label>
+                            <select id="share-expires">
+                                <option value="1d">1 天</option>
+                                <option value="7d" selected>7 天</option>
+                                <option value="30d">30 天</option>
+                                <option value="180d">半年</option>
+                            </select>
+                        </div>
+                        <div class="field" style="margin:0;flex:1;min-width:60px">
+                            <label>从第几周</label>
+                            <input type="number" id="share-week-from" value="1" min="1" max="30">
+                        </div>
+                        <div class="field" style="margin:0;flex:1;min-width:60px">
+                            <label>到第几周</label>
+                            <input type="number" id="share-week-to" value="19" min="1" max="30">
+                        </div>
                     </div>
-                    <div class="field" style="margin:0;flex:1;min-width:70px">
-                        <label>从第几周</label>
-                        <input type="number" id="share-week-from" value="1" min="1" max="30">
-                    </div>
-                    <div class="field" style="margin:0;flex:1;min-width:70px">
-                        <label>到第几周</label>
-                        <input type="number" id="share-week-to" value="19" min="1" max="30">
-                    </div>
-                    <button class="btn btn-primary" onclick="createShare()" style="white-space:nowrap;align-self:flex-end">生成</button>
+                    <button class="btn btn-primary share-create-btn" onclick="createShare()">生成</button>
                 </div>
 
                 <!-- 生成结果 -->
@@ -454,10 +494,12 @@
                     <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
                     <div class="hint">地点含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多标识用英文逗号分隔，如 <code>教2,实2</code>。留空不启用。</div>
                 </div>
-                <div class="btn-group" style="margin-top:4px">
-                    <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
-                    <span class="save-status" id="admin-save-status">✓ 已保存</span>
-                    <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled style="margin-left:auto">立即抓取所有用户</button>
+                <div class="admin-btn-group" style="margin-top:4px">
+                    <div class="admin-btn-group-left">
+                        <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
+                        <span class="save-status" id="admin-save-status">✓ 已保存</span>
+                    </div>
+                    <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled>立即抓取所有用户</button>
                 </div>
 
                 <!-- 服务管理 -->
