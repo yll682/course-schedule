@@ -729,7 +729,9 @@
                         // 彩色课程模式：获取颜色
                         let courseBgColor = colors.course;
                         let courseBorderColor = hasConflict ? '#ff4d4f' : colors.accent;
-                        if (colorfulEnabled && !hasConflict) {
+                        if (hasConflict) {
+                            courseBgColor = '#fff0f0'; // 冲突时浅红背景
+                        } else if (colorfulEnabled) {
                             const colorIdx = getNextCourseColor(day, slot, usedColorMap, courseColors, course.course_name);
                             courseBgColor = courseColors[colorIdx].bg;
                             courseBorderColor = courseColors[colorIdx].border;
@@ -1383,7 +1385,10 @@
                         // 彩色课程模式：获取颜色
                         let courseBgStyle = '';
                         let courseBorderStyle = '';
-                        if (colorfulEnabled && !hasConflict) {
+                        if (hasConflict) {
+                            courseBgStyle = 'background:#fff0f0;';
+                            courseBorderStyle = 'border-left-color:#ff4d4f;';
+                        } else if (colorfulEnabled) {
                             const colorIdx = getNextCourseColor(day, slot, usedColorMap, courseColors, course.course_name);
                             const color = courseColors[colorIdx];
                             courseBgStyle = `background:${color.bg};`;
@@ -1392,8 +1397,6 @@
                             for (let s = slot; s < slot + duration; s++) {
                                 usedColorMap[`${day}-${s}`] = colorIdx;
                             }
-                        } else if (hasConflict) {
-                            courseBorderStyle = 'border-left-color:#ff4d4f;';
                         }
 
                         // 检查是否显示课程时间和地点
