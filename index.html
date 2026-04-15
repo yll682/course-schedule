@@ -9,13 +9,13 @@
     <link rel="apple-touch-icon" href="/icon.svg">
     <link rel="stylesheet" href="/ibm-plex-sans-sc.css">
     <script>
+        var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         (function() {
             try {
                 var saved = localStorage.getItem('schedule_theme_color');
                 if (saved) {
                     var theme = JSON.parse(saved);
                     var root = document.documentElement;
-                    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                     var colors = isDark ? theme.dark : theme.light;
                     root.style.setProperty('--c-primary', colors.primary);
                     root.style.setProperty('--c-accent', colors.accent);
@@ -88,6 +88,16 @@
             flex-direction: column;
             justify-content: center;
             line-height: 1.2;
+        }
+        .header-today {
+            filter: brightness(1.2) saturate(1.1);
+            box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.3);
+        }
+        @media (prefers-color-scheme: dark) {
+            .header-today {
+                filter: brightness(1.3) saturate(1.15);
+                box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.2);
+            }
         }
         .time-slot {
             background: var(--c-subtle);
@@ -263,7 +273,89 @@
         let importWeeksMap = {};
         let slot34SpecialPattern = '';
         const BUTTON_MODE_KEY = 'schedule_button_mode';
+        const COLORFUL_COURSES_KEY = 'schedule_colorful_courses';
         let headerButtonMode = 'back_to_week';
+
+        // 课程彩色模式颜色配置（丰富鲜艳）
+        const COURSE_COLORS_LIGHT = [
+            { bg: '#e3f2fd', border: '#2196f3' },  // 天蓝
+            { bg: '#e8f5e9', border: '#4caf50' },  // 薄荷绿
+            { bg: '#f3e5f5', border: '#9c27b0' },  // 薰衣草紫
+            { bg: '#fff8e1', border: '#ffc107' },  // 琥珀黄
+            { bg: '#ffebee', border: '#f44336' },  // 珊瑚红
+            { bg: '#f1f8e9', border: '#8bc34a' },  // 青柠绿
+            { bg: '#fff3e0', border: '#ff9800' },  // 活力橙
+            { bg: '#fce4ec', border: '#e91e63' },  // 玫红
+            { bg: '#e0f7fa', border: '#00bcd4' },  // 青色
+            { bg: '#e8eaf6', border: '#3f51b5' },  // 靛蓝
+            { bg: '#fffde7', border: '#ffeb3b' },  // 柠檬黄
+            { bg: '#e0f2f1', border: '#009688' },  // 蓝绿
+            { bg: '#fbe9e7', border: '#ff5722' },  // 朱红
+            { bg: '#efebe9', border: '#795548' },  // 浅褐
+        ];
+        const COURSE_COLORS_DARK = [
+            { bg: '#1a3a4a', border: '#64b5f6' },  // 天蓝
+            { bg: '#1b4a1b', border: '#81c784' },  // 薄荷绿
+            { bg: '#3a1a4a', border: '#ba68c8' },  // 薰衣草紫
+            { bg: '#4a3a00', border: '#ffd54f' },  // 琥珀黄
+            { bg: '#4a1a1a', border: '#ef5350' },  // 珊瑚红
+            { bg: '#2a4a00', border: '#aed581' },  // 青柠绿
+            { bg: '#4a2a00', border: '#ffb74d' },  // 活力橙
+            { bg: '#4a1a2f', border: '#f06292' },  // 玫红
+            { bg: '#0a3d3d', border: '#4dd0e1' },  // 青色
+            { bg: '#1a1a4a', border: '#7986cb' },  // 靛蓝
+            { bg: '#4a4500', border: '#fff176' },  // 柠檬黄
+            { bg: '#0a3d35', border: '#4db6ac' },  // 蓝绿
+            { bg: '#4a1a0a', border: '#ff8a65' },  // 朱红
+            { bg: '#3a2a1a', border: '#a1887f' },  // 浅褐
+        ];
+
+        function isColorfulCoursesEnabled() {
+            try {
+                return localStorage.getItem(COLORFUL_COURSES_KEY) === 'true';
+            } catch (_) {
+                return false;
+            }
+        }
+
+        function getNextCourseColor(day, slot, usedColorMap, colors, courseName) {
+            // 基于课程名计算基础颜色索引，保证同名课程颜色一致
+            let hash = 0;
+            for (let i = 0; i < (courseName || '').length; i++) {
+                hash = ((hash << 5) - hash) + courseName.charCodeAt(i);
+                hash = hash & 0xFFFFFFFF;
+            }
+            const baseIdx = Math.abs(hash) % colors.length;
+
+            const neighborKeys = [
+                `${day}-${slot - 1}`,
+                `${day}-${slot + 1}`,
+            ];
+            const prevDay = parseInt(day) > 0 ? (parseInt(day) - 1).toString() : '6';
+            neighborKeys.push(`${prevDay}-${slot}`);
+            const nextDay = parseInt(day) < 6 ? (parseInt(day) + 1).toString() : '0';
+            neighborKeys.push(`${nextDay}-${slot}`);
+
+            const usedColors = new Set();
+            neighborKeys.forEach(key => {
+                if (usedColorMap[key] !== undefined) {
+                    usedColors.add(usedColorMap[key]);
+                }
+            });
+
+            // 优先使用基础颜色（同名课程同色），若冲突则向两边搜索
+            if (!usedColors.has(baseIdx)) {
+                return baseIdx;
+            }
+
+            for (let offset = 1; offset < colors.length; offset++) {
+                const up = (baseIdx + offset) % colors.length;
+                if (!usedColors.has(up)) return up;
+                const down = (baseIdx - offset + colors.length) % colors.length;
+                if (!usedColors.has(down)) return down;
+            }
+            return 0;
+        }
         const CAPTURE_PRESETS = {
             a4: { label: 'A4', width: 595, minHeight: 842 },
         };
@@ -527,6 +619,9 @@
                 }
             })();
 
+            // 今天日期
+            const today = new Date().toISOString().slice(0, 10);
+
             // 绘制表头背景
             ctx.fillStyle = colors.primary;
             ctx.fillRect(padding, padding + 30, canvasWidth - padding * 2, headerHeight);
@@ -550,6 +645,15 @@
                 const x = padding + timeColWidth + di * cellWidth;
                 const dayData = coursesData.完整课表?.find(d => d.weekday === day);
                 const dateStr = dayData?.date ? dayData.date.slice(5) : '';
+                const isToday = dayData && dayData.date === today;
+
+                // 今天列高亮 — 轻微提亮
+                if (isToday) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                    ctx.fillRect(x, padding + 30, cellWidth, headerHeight);
+                }
+
+                ctx.fillStyle = '#ffffff';
                 ctx.fillText(weekMap[day], x + cellWidth / 2, padding + 30 + headerHeight / 2 - 2);
                 ctx.font = '11px "IBM Plex Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
                 ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -1200,10 +1304,12 @@
 
             // 表头行（grid-row:1）
             table.innerHTML = '<div class="cell header" style="grid-row:1;grid-column:1">节次</div>';
+            const today = new Date().toISOString().slice(0, 10);
             weekOrder.forEach((day, di) => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
                 const dateStr = dayData && dayData.date ? dayData.date.slice(5) : '';
-                table.innerHTML += `<div class="cell header" style="grid-row:1;grid-column:${di+2}">${weekMap[day]}<br><small>${dateStr}</small></div>`;
+                const isToday = dayData && dayData.date === today;
+                table.innerHTML += `<div class="cell header ${isToday ? 'header-today' : ''}" style="grid-row:1;grid-column:${di+2}">${weekMap[day]}<br><small>${dateStr}</small></div>`;
             });
 
             // 两条分隔行（显式定位，不参与自动布局）
@@ -1211,6 +1317,9 @@
             table.innerHTML += '<div style="grid-row:11;grid-column:1/-1;background:var(--c-surface)"></div>';
 
             const occupied = {};
+            const usedColorMap = {}; // 彩色课程模式：记录已使用的颜色索引
+            const colorfulEnabled = isColorfulCoursesEnabled();
+            const courseColors = isDark ? COURSE_COLORS_DARK : COURSE_COLORS_LIGHT;
             for (let slot = 1; slot <= 10; slot++) {
                 const gr = slotRow(slot);
                 table.innerHTML += `<div class="cell time-slot" style="grid-row:${gr};grid-column:1">${slot}<br><small style="font-weight:normal">${times[slot]}</small></div>`;
@@ -1261,6 +1370,22 @@
                         // 如果有冲突课程，显示警告标记
                         const hasConflict = uniqueCourses.length > 1;
                         const conflictMark = hasConflict ? '<span style="color:red;font-weight:bold">⚠️</span> ' : '';
+
+                        // 彩色课程模式：获取颜色
+                        let courseBgStyle = '';
+                        let courseBorderStyle = '';
+                        if (colorfulEnabled && !hasConflict) {
+                            const colorIdx = getNextCourseColor(day, slot, usedColorMap, courseColors, course.course_name);
+                            const color = courseColors[colorIdx];
+                            courseBgStyle = `background:${color.bg};`;
+                            courseBorderStyle = `border-left-color:${color.border};`;
+                            // 记录课程占据的所有格子
+                            for (let s = slot; s < slot + duration; s++) {
+                                usedColorMap[`${day}-${s}`] = colorIdx;
+                            }
+                        } else if (hasConflict) {
+                            courseBorderStyle = 'border-left-color:#ff4d4f;';
+                        }
 
                         // 检查是否显示课程时间和地点
                         const showTime = (() => {
@@ -1395,7 +1520,7 @@
 
                         table.innerHTML += `
                             <div class="cell" style="grid-row:${gr}/${endGr};grid-column:${gc}">
-                                <div class="course" data-key="${esc(key)}" style="${hasConflict ? 'border-left-color:#ff4d4f;' : ''}">
+                                <div class="course" data-key="${esc(key)}" style="${courseBgStyle}${courseBorderStyle}">
                                     <div class="course-name">${conflictMark}${esc(course.course_name)}</div>
                                     ${locationHtml}
                                     ${timeHtml}
@@ -1488,13 +1613,15 @@
                     try {
                         const theme = JSON.parse(saved);
                         const root = document.documentElement;
-                        const isDark = e.matches;
+                        isDark = e.matches;
                         const colors = isDark ? theme.dark : theme.light;
                         root.style.setProperty('--c-primary', colors.primary);
                         root.style.setProperty('--c-accent', colors.accent);
                         root.style.setProperty('--c-course', colors.course);
                     } catch (_) {}
                 }
+                // 重新渲染课表，让 today 高亮等样式立即生效
+                if (window._lastCoursesData) renderCourses(window._lastCoursesData);
             });
         }
         init();

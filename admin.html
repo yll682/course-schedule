@@ -392,6 +392,11 @@
                             <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked>
                             <span class="toggle-switch"></span>
                         </label>
+                        <label class="toggle-row">
+                            <span class="toggle-row-label">彩色课程</span>
+                            <input type="checkbox" id="colorful-courses" onchange="saveAdvancedOptions()">
+                            <span class="toggle-switch"></span>
+                        </label>
                     </div>
 
                     <!-- 主题色 -->
@@ -567,6 +572,7 @@
         const SHOW_COURSE_LOCATION_KEY = 'schedule_show_course_location';
         const SHOW_EMOJI_KEY = 'schedule_show_emoji';
         const THEME_COLOR_KEY = 'schedule_theme_color';
+        const COLORFUL_COURSES_KEY = 'schedule_colorful_courses';
 
         const THEME_COLORS = [
             {
@@ -718,10 +724,12 @@
             const showTime = readLocalPreference(SHOW_COURSE_TIME_KEY, '1');
             const showLocation = readLocalPreference(SHOW_COURSE_LOCATION_KEY, '1');
             const showEmoji = readLocalPreference(SHOW_EMOJI_KEY, '1');
+            const colorfulCourses = readLocalPreference(COLORFUL_COURSES_KEY, 'false');
             document.getElementById('home-button-mode').value = mode;
             document.getElementById('show-course-time').checked = showTime === '1';
             document.getElementById('show-course-location').checked = showLocation === '1';
             document.getElementById('show-emoji').checked = showEmoji === '1';
+            document.getElementById('colorful-courses').checked = colorfulCourses === 'true';
             syncChipMode(mode);
             syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
             loadThemeColors();
@@ -779,10 +787,12 @@
             const showTime = document.getElementById('show-course-time').checked ? '1' : '0';
             const showLocation = document.getElementById('show-course-location').checked ? '1' : '0';
             const showEmoji = document.getElementById('show-emoji').checked ? '1' : '0';
+            const colorfulCourses = document.getElementById('colorful-courses').checked ? 'true' : 'false';
             writeLocalPreference(BUTTON_MODE_KEY, mode);
             writeLocalPreference(SHOW_COURSE_TIME_KEY, showTime);
             writeLocalPreference(SHOW_COURSE_LOCATION_KEY, showLocation);
             writeLocalPreference(SHOW_EMOJI_KEY, showEmoji);
+            writeLocalPreference(COLORFUL_COURSES_KEY, colorfulCourses);
             showAdvancedSaveStatus();
         }
 
@@ -1040,10 +1050,12 @@
                 const shareText = `${myName}给你分享了自己的课程表，点击链接查看：${shareLink}`;
                 return `<div class="token-row" style="flex-direction:column;align-items:stretch;gap:6px">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                        <code style="font-size:1rem;letter-spacing:3px;font-weight:700;flex:1">${esc(t.token)}</code>
+                        <code style="font-size:1rem;letter-spacing:3px;font-weight:700;flex:1;min-width:0">${esc(t.token)}</code>
                         ${badge}
-                        <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
-                        <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                        <div style="display:flex;gap:6px;flex-shrink:0">
+                            <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
+                            <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                        </div>
                     </div>
                     <div style="font-size:0.75rem;color:var(--c-muted)">第 ${t.week_from}~${t.week_to} 周 · 创建 ${created} · 有效至 ${expStr}</div>
                 </div>`;
@@ -1082,13 +1094,14 @@
                 const shareText = `${ownerName}给你分享了TA的课程表，点击链接查看：${shareLink}`;
                 return `<div class="token-row" style="flex-direction:column;align-items:stretch;gap:6px">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                        <code style="font-size:0.95rem;letter-spacing:3px;font-weight:700;flex:1">${esc(t.token)}</code>
-                        <span style="color:var(--c-primary);font-size:0.8rem;font-weight:500">${esc(ownerName)}</span>
+                        <code style="font-size:0.95rem;letter-spacing:3px;font-weight:700;flex:1;min-width:0">${esc(t.token)}</code>
                         ${badge}
-                        <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
-                        <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                        <div style="display:flex;gap:6px;flex-shrink:0">
+                            <button class="btn btn-primary btn-sm" onclick="copyShareText('${esc(shareText)}')">分享</button>
+                            <button class="btn btn-default btn-sm" onclick="revokeShare('${esc(t.token)}')">撤销</button>
+                        </div>
                     </div>
-                    <div style="font-size:0.75rem;color:var(--c-muted)">第 ${t.week_from}~${t.week_to} 周 · ${created} 创建 · ${durStr} · 有效至 ${expStr}</div>
+                    <div style="font-size:0.75rem;color:var(--c-muted)"><span style="color:var(--c-primary);font-weight:500">${esc(ownerName)}</span> · 第 ${t.week_from}~${t.week_to} 周 · ${created} 创建 · ${durStr} · 有效至 ${expStr}</div>
                 </div>`;
             }).join('');
         }
