@@ -690,6 +690,9 @@
 
             // 绘制课程
             const occupied = {};
+            const usedColorMap = {}; // 彩色课程模式：记录已使用的颜色索引
+            const colorfulEnabled = isColorfulCoursesEnabled();
+            const courseColors = COURSE_COLORS_LIGHT; // 截图固定使用浅色配色
             for (let slot = 1; slot <= slots; slot++) {
                 weekOrder.forEach((day, di) => {
                     const key = `${day}-${slot}`;
@@ -729,13 +732,25 @@
                         }) || [];
                         const hasConflict = conflicts.length > 0;
 
+                        // 彩色课程模式：获取颜色
+                        let courseBgColor = colors.course;
+                        let courseBorderColor = hasConflict ? '#ff4d4f' : colors.accent;
+                        if (colorfulEnabled && !hasConflict) {
+                            const colorIdx = getNextCourseColor(day, slot, usedColorMap, courseColors, course.course_name);
+                            courseBgColor = courseColors[colorIdx].bg;
+                            courseBorderColor = courseColors[colorIdx].border;
+                            for (let s = slot; s < slot + duration; s++) {
+                                usedColorMap[`${day}-${s}`] = colorIdx;
+                            }
+                        }
+
                         // 课程背景（完整绘制，覆盖分隔线）
                         const margin = 4;
-                        ctx.fillStyle = colors.course;
+                        ctx.fillStyle = courseBgColor;
                         ctx.fillRect(x + margin, y + margin, cellWidth - margin * 2, height);
 
                         // 左边框
-                        ctx.fillStyle = hasConflict ? '#ff4d4f' : colors.accent;
+                        ctx.fillStyle = courseBorderColor;
                         ctx.fillRect(x + margin, y + margin, 3, height);
 
                         // 课程文字
