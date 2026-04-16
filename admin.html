@@ -353,8 +353,9 @@
                     <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出课表</button>
                     <button class="btn btn-default" onclick="clearLocalCache()">清空缓存（出现问题点这）</button>
                 </div>
-                <div style="margin-top:8px">
+                <div class="btn-group" style="margin-top:8px">
                     <button class="btn btn-danger" onclick="doLogout()">退出登录</button>
+                    <button class="btn btn-default" id="install-btn" onclick="installPWA()">放到桌面（使用 Chrome）</button>
                 </div>
                 <div id="export-status" style="font-size:0.8rem;color:var(--c-muted);margin-top:8px;display:none"></div>
                 <div id="cache-clear-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
@@ -563,6 +564,32 @@
     </div>
 
     <script>
+        let deferredPrompt = null;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('install-btn').style.display = '';
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredPrompt = null;
+            document.getElementById('install-btn').style.display = 'none';
+        });
+
+        async function installPWA() {
+            if (!deferredPrompt) {
+                alert('请使用 Chrome 浏览器访问，并点击地址栏右侧的安装图标');
+                return;
+            }
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                document.getElementById('install-btn').style.display = 'none';
+            }
+            deferredPrompt = null;
+        }
+
         let isAdmin = false;
         let maxWeekForExport = 20;
         let adminUsersList = [];
