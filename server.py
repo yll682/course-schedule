@@ -587,76 +587,69 @@ def get_user():
 
 @app.route('/api/week_number', methods=['GET'])
 def get_week_number():
-    """
-    根据日期计算周次
-
-    参数：
-        date - YYYY-MM-DD 格式的日期字符串（可选，默认返回当前周）
-
-    返回：
-        week_number - 周次数字
-    """
+    """根据日期查询对应的学期周次（基于实际缓存数据）"""
     date_str = request.args.get('date')
 
-    # 从数据库中获取最近的课表数据作为参照
+    # 从数据库中获取所有缓存周次的数据
     with _db() as conn:
         c = conn.cursor()
-        c.execute('SELECT data FROM courses ORDER BY cached_at DESC LIMIT 1')
-        row = c.fetchone()
 
-    if not row:
-        return jsonify({'success': False, 'message': '系统中无缓存数据，无法计算周次'}), 404
+        if not date_str:
+            # 如果没有提供日期，返回当前周
+            c.execute('SELECT data FROM courses ORDER BY cached_at DESC LIMIT 1')
+            row = c.fetchone()
+            if not row:
+                return jsonify({'success': False, 'message': '系统中无缓存数据'}), 404
 
-    try:
-        ref_data = json.loads(row[0])
-        ref_week = ref_data['metadata']['current_week']
-        today_str = ref_data['metadata']['today']
+            try:
+                data = json.loads(row[0])
+                current_week = data['metadata']['current_week']
+                today = data['metadata'].get('today', '')
+                return jsonify({
+                    'success': True,
+                    'week_number': current_week,
+                    'current_date': today
+                })
+            except (KeyError, ValueError) as e:
+                return jsonify({'success': False, 'message': f'数据解析失败: {str(e)}'}), 500
 
-        if not today_str:
-            return jsonify({'success': False, 'message': '缓存数据缺少日期信息'}), 500
+        # 提供了日期，需要查找该日期对应的周次
+        c.execute('SELECT week, data FROM courses')
+        rows = c.fetchall()
 
-        # 解析参照日期（today）
-        today = datetime.strptime(today_str, '%Y-%m-%d')
-    except (KeyError, ValueError) as e:
-        return jsonify({'success': False, 'message': f'数据解析失败: {str(e)}'}), 500
+        if not rows:
+            return jsonify({'success': False, 'message': '系统中无缓存数据'}), 404
 
-    # 如果没有提供日期，返回当前周
-    if not date_str:
+        # 验证日期格式
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'success': False, 'message': '日期格式错误，请使用 YYYY-MM-DD 格式'}), 400
+
+        # 遍历所有周次，查找包含该日期的周
+        for week, data_str in rows:
+            try:
+                data = json.loads(data_str)
+                # 检查该周的每一天
+                for day_data in data.get('完整课表', []):
+                    day_date_str = day_data.get('date', '')
+                    if day_date_str == date_str:
+                        # 找到了！返回该周次
+                        return jsonify({
+                            'success': True,
+                            'week_number': int(week),
+                            'target_date': date_str,
+                            'weekday': day_data.get('weekday_cn', '')
+                        })
+            except (json.JSONDecodeError, KeyError):
+                continue
+
+        # 没找到该日期
         return jsonify({
-            'success': True,
-            'week_number': ref_week,
-            'current_date': today_str
-        })
-
-    # 验证并解析目标日期
-    try:
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
-        return jsonify({'success': False, 'message': '日期格式错误，请使用 YYYY-MM-DD 格式'}), 400
-
-    # 计算天数差
-    days_diff = (target_date - today).days
-
-    # 计算周次（每周7天）
-    week_diff = days_diff // 7
-    target_week = ref_week + week_diff
-
-    # 尝试获取最大周次进行范围检查
-    max_week = ref_data['metadata'].get('max_week', 30)
-
-    # 返回结果（即使超出范围也返回，但给出提示）
-    result = {
-        'success': True,
-        'week_number': target_week,
-        'target_date': date_str
-    }
-
-    if target_week < 1:
-        result['warning'] = f'计算出的周次 {target_week} 小于学期开始'
-    elif target_week > max_week:
-        result['warning'] = f'计算出的周次 {target_week} 超出学期范围（最大周次：{max_week}）'
-
-    return jsonify(result)
+            'success': False,
+            'message': f'日期 {date_str} 不在任何已缓存的周次范围内',
+            'target_date': date_str
+        }), 404
 
 
 @app.route('/api/courses/<int:week>', methods=['GET'])
