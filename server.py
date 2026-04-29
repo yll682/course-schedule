@@ -585,6 +585,80 @@ def get_user():
     })
 
 
+@app.route('/api/week_number', methods=['GET'])
+def get_week_number():
+    """
+    根据日期计算周次
+
+    参数：
+        date - YYYY-MM-DD 格式的日期字符串（可选，默认返回当前周）
+
+    返回：
+        week_number - 周次数字
+    """
+    date_str = request.args.get('date')
+
+    # 从数据库中获取最近的课表数据作为参照
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT data FROM courses ORDER BY cached_at DESC LIMIT 1')
+        row = c.fetchone()
+
+    if not row:
+        return jsonify({'success': False, 'message': '系统中无缓存数据，无法计算周次'}), 404
+
+    try:
+        ref_data = json.loads(row[0])
+        ref_week = ref_data['metadata']['current_week']
+        today_str = ref_data['metadata']['today']
+
+        if not today_str:
+            return jsonify({'success': False, 'message': '缓存数据缺少日期信息'}), 500
+
+        # 解析参照日期（today）
+        today = datetime.strptime(today_str, '%Y-%m-%d')
+    except (KeyError, ValueError) as e:
+        return jsonify({'success': False, 'message': f'数据解析失败: {str(e)}'}), 500
+
+    # 如果没有提供日期，返回当前周
+    if not date_str:
+        return jsonify({
+            'success': True,
+            'week_number': ref_week,
+            'current_date': today_str
+        })
+
+    # 验证并解析目标日期
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'success': False, 'message': '日期格式错误，请使用 YYYY-MM-DD 格式'}), 400
+
+    # 计算天数差
+    days_diff = (target_date - today).days
+
+    # 计算周次（每周7天）
+    week_diff = days_diff // 7
+    target_week = ref_week + week_diff
+
+    # 尝试获取最大周次进行范围检查
+    max_week = ref_data['metadata'].get('max_week', 30)
+
+    # 返回结果（即使超出范围也返回，但给出提示）
+    result = {
+        'success': True,
+        'week_number': target_week,
+        'target_date': date_str
+    }
+
+    if target_week < 1:
+        result['warning'] = f'计算出的周次 {target_week} 小于学期开始'
+    elif target_week > max_week:
+        result['warning'] = f'计算出的周次 {target_week} 超出学期范围（最大周次：{max_week}）'
+
+    return jsonify(result)
+
+
 @app.route('/api/courses/<int:week>', methods=['GET'])
 def get_courses(week):
     # ── 确定访问身份与周次限制 ──────────────────────────────────────────────────

@@ -178,3 +178,75 @@ python -c "import secrets; print(secrets.token_hex(16))"
 - **静态文件保护**：屏蔽 `.py`、`.db`、`.env` 等敏感扩展名
 - **仅本地监听**：Gunicorn 仅监听 `127.0.0.1`，不直接对外暴露
 - **敏感文件**：`*.db`、`.env` 已加入 `.gitignore`
+
+## 📡 API 接口
+
+### 周次查询接口
+
+**接口地址**：`GET /api/week_number`
+
+**功能**：根据日期查询对应的学期周次
+
+**参数**：
+- `date`（可选）：YYYY-MM-DD 格式的日期字符串
+
+**返回格式**：JSON
+
+#### 使用示例
+
+1. **获取当前周次**（不传参数）
+```bash
+curl http://localhost:5000/api/week_number
+```
+返回：
+```json
+{
+  "success": true,
+  "week_number": 7,
+  "current_date": "2026-04-19"
+}
+```
+
+2. **查询指定日期的周次**
+```bash
+curl "http://localhost:5000/api/week_number?date=2026-05-06"
+```
+返回：
+```json
+{
+  "success": true,
+  "week_number": 8,
+  "target_date": "2026-05-06"
+}
+```
+
+3. **超出学期范围的日期**
+```bash
+curl "http://localhost:5000/api/week_number?date=2026-09-01"
+```
+返回：
+```json
+{
+  "success": true,
+  "week_number": 26,
+  "target_date": "2026-09-01",
+  "warning": "计算出的周次 26 超出学期范围（最大周次：19）"
+}
+```
+
+#### 计算原理
+
+接口从数据库最近的课表缓存中获取参照数据：
+- 参照周次（`current_week`）
+- 参照日期（`today`）
+
+然后计算目标日期与参照日期的天数差，推算出周次：
+```
+target_week = current_week + (days_diff / 7)
+```
+
+#### 错误处理
+
+- **无缓存数据**：返回 404，提示系统中无数据
+- **日期格式错误**：返回 400，提示使用正确格式（YYYY-MM-DD）
+- **超出学期范围**：返回计算结果，并附带警告提示

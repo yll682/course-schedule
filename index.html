@@ -613,9 +613,6 @@
                 }
             })();
 
-            // 今天日期
-            const today = new Date().toISOString().slice(0, 10);
-
             // 绘制表头背景
             ctx.fillStyle = colors.primary;
             ctx.fillRect(padding, padding + 30, canvasWidth - padding * 2, headerHeight);
@@ -639,13 +636,8 @@
                 const x = padding + timeColWidth + di * cellWidth;
                 const dayData = coursesData.完整课表?.find(d => d.weekday === day);
                 const dateStr = dayData?.date ? dayData.date.slice(5) : '';
-                const isToday = dayData && dayData.date === today;
 
-                // 今天列高亮 — 轻微提亮
-                if (isToday) {
-                    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-                    ctx.fillRect(x, padding + 30, cellWidth, headerHeight);
-                }
+                // 截图不应用 today 高亮样式，保持原始外观
 
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(weekMap[day], x + cellWidth / 2, padding + 30 + headerHeight / 2 - 2);
@@ -1315,7 +1307,8 @@
 
             // 表头行（grid-row:1）
             table.innerHTML = '<div class="cell header" style="grid-row:1;grid-column:1">节次</div>';
-            const today = new Date().toISOString().slice(0, 10);
+            // 使用 API 返回的 today 日期，而不是本地计算的日期，避免0点前后不准确
+            const today = data.metadata?.today || new Date().toISOString().slice(0, 10);
             weekOrder.forEach((day, di) => {
                 const dayData = data.完整课表.find(d => d.weekday === day);
                 const dateStr = dayData && dayData.date ? dayData.date.slice(5) : '';
