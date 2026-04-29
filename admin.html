@@ -351,6 +351,7 @@
             <div class="card-body">
                 <div class="btn-group">
                     <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出课表</button>
+                    <button class="btn btn-default" onclick="copyWeekNumberUrl()">复制周次查询接口URL</button>
                     <button class="btn btn-default" onclick="clearLocalCache()">清空缓存（出现问题点这）</button>
                 </div>
                 <div class="btn-group" style="margin-top:8px">
@@ -359,6 +360,7 @@
                 </div>
                 <div id="export-status" style="font-size:0.8rem;color:var(--c-muted);margin-top:8px;display:none"></div>
                 <div id="cache-clear-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
+                <div id="week-number-url-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
 
                 <div class="divider" style="margin-top:14px"></div>
 
@@ -1012,6 +1014,23 @@
                 console.error('Clear cache error:', e);
                 alert('清空缓存时出现错误: ' + e.message);
             }
+        }
+
+        function copyWeekNumberUrl() {
+            const baseUrl = window.location.origin;
+            const apiUrl = `${baseUrl}/api/week_number`;
+
+            navigator.clipboard.writeText(apiUrl).then(() => {
+                const status = document.getElementById('week-number-url-status');
+                status.textContent = `✓ 已复制: ${apiUrl}`;
+                status.style.display = 'block';
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 3000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert(`复制失败，请手动复制:\n${apiUrl}`);
+            });
         }
 
         async function doLogout() {
