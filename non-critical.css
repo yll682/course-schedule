@@ -16,8 +16,9 @@
 }
 
 /* ── 课程详情弹窗（默认隐藏） ── */
+/* 注意：display: none 已在关键 CSS 中定义，这里只包含其他样式 */
 .modal-overlay {
-    display: none; position: fixed; inset: 0;
+    position: fixed; inset: 0;
     background: rgba(0,0,0,0.45); z-index: 1000;
     align-items: center; justify-content: center;
 }

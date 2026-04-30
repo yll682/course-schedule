@@ -122,6 +122,13 @@ body { padding: 10px; }
     line-height: 1.4;
     word-wrap: break-word;
 }
+/* 弹窗基础样式：确保默认隐藏和打开机制（critical） */
+.modal-overlay {
+    display: none;
+}
+.modal-overlay.open {
+    display: flex;
+}
 @media (max-width: 768px) {
     .cell { padding: 4px; }
     .course { padding: 4px 5px; }
@@ -155,7 +162,7 @@ body { padding: 10px; }
         <div class="timetable-wrapper"><div class="timetable" id="timetable"></div></div>
     </div>
 
-    <!-- 课程详情弹窗 -->
+    <!-- 课程详情弹窗（JS控制初始隐藏） -->
     <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
         <div class="modal" id="modal">
             <button class="modal-close" onclick="closeModal()">✕</button>
