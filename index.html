@@ -7,6 +7,9 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#1890ff">
     <link rel="apple-touch-icon" href="/icon.svg">
+    <!-- 字体预加载：提高首屏渲染速度 -->
+    <link rel="preload" href="/fonts/IBMPlexSansSC-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IBMPlexSansSC-Medium.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/ibm-plex-sans-sc.css">
     <script>
         var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -25,131 +28,108 @@
         })();
     </script>
     <link rel="stylesheet" href="/style.css">
+    <!-- 关键 CSS 内联：首屏渲染必需样式 -->
     <style>
-        /* ── 顶栏 ── */
-        .page-header {
-            display: flex; align-items: center; justify-content: space-between;
-            gap: 8px; margin: 4px 0 6px;
-        }
-        .page-header h1 {
-            margin: 0; flex: 1; text-align: center;
-            font-size: clamp(1.1rem, 4vw, 1.6rem);
-        }
-        .header-side { min-width: 80px; }
-        .header-side.right { text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-        .side-label { font-size: 0.82rem; color: var(--c-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
-        .icon-btn {
-            padding: 5px 10px; background: transparent;
-            border: 1px solid var(--c-border);
-            border-radius: 6px; cursor: pointer; color: var(--c-text);
-            font-size: 1rem; line-height: 1; white-space: nowrap;
-        }
-        .icon-btn:hover { background: var(--c-hover); }
-        .icon-btn.capture-mode { min-width: 46px; }
-        body { padding: 10px; }
-        .container {
-            max-width: 1400px; margin: 0 auto;
-            background: var(--c-surface);
-            padding: clamp(10px, 3vw, 20px);
-            border-radius: 8px;
-        }
-        /* ── 周次栏 ── */
-        .week-bar {
-            display: flex; align-items: center; justify-content: center;
-            gap: 12px; margin: 6px 0 4px;
-        }
-        .week-bar button {
-            padding: 6px 14px;
-            border: 1px solid var(--c-border);
-            background: var(--c-input);
-            color: var(--c-text); border-radius: 4px; cursor: pointer; font-size: 0.9rem;
-        }
-        .week-bar button:hover { background: var(--c-hover2); }
-        #current-week { font-size: 1rem; font-weight: 500; min-width: 64px; text-align: center; }
-        /* ── 课表 ── */
-        .meta { text-align: center; color: var(--c-muted); margin: 8px 0; font-size: clamp(0.72rem, 2vw, 0.88rem); }
-        .timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        .timetable {
-            display: grid;
-            grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
-            grid-template-rows: 50px 62px 62px 62px 62px 3px 62px 62px 62px 62px 3px 62px 62px;
-            gap: 1px;
-            background: var(--c-grid);
-            border: 1px solid var(--c-grid);
-            min-width: 600px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; z-index: 1; display: flex; }
-        .header {
-            background: var(--c-primary);
-            color: white; font-weight: bold; text-align: center;
-            padding: 8px; font-size: clamp(0.82rem, 2vw, 0.96rem);
-            flex-direction: column;
-            justify-content: center;
-            line-height: 1.2;
-        }
-        .header-today {
-            filter: brightness(1.2) saturate(1.1);
-            box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.3);
-        }
-        @media (prefers-color-scheme: dark) {
-            .header-today {
-                filter: brightness(1.3) saturate(1.15);
-                box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.2);
-            }
-        }
-        .time-slot {
-            background: var(--c-subtle);
-            font-size: clamp(0.72rem, 1.6vw, 0.82rem);
-            text-align: center;
-            font-weight: bold;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            line-height: 1.3;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
-        .course { background: var(--c-course); border-left: 3px solid var(--c-accent); padding: 5px 6px; font-size: clamp(0.66rem, 1.8vw, 0.78rem); height: 100%; overflow: hidden; }
-        .course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
-        .course-info { opacity: 0.8; font-size: clamp(0.56rem, 1.4vw, 0.62rem); line-height: 1.4; word-wrap: break-word; transition: font-size 0.1s ease; }
-        .course { cursor: pointer; }
-        .course:active { filter: brightness(0.93); }
-        @media (max-width: 768px) {
-            .cell { padding: 4px; }
-            .course { padding: 4px 5px; }
-        }
-        /* ── 课程详情弹窗 ── */
-        .modal-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.45); z-index: 1000;
-            align-items: center; justify-content: center;
-        }
-        .modal-overlay.open { display: flex; }
-        .modal {
-            background: var(--c-surface); border-radius: 12px;
-            padding: 24px 20px 20px; max-width: 360px; width: 90%;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-            position: relative;
-        }
-        .modal-title {
-            font-size: 1.1rem; font-weight: bold; margin: 0 0 14px;
-            padding-right: 28px; line-height: 1.4; color: var(--c-text);
-        }
-        .modal-row {
-            display: flex; gap: 8px; margin: 6px 0;
-            font-size: 0.9rem; color: var(--c-text);
-        }
-        .modal-row .icon { flex-shrink: 0; width: 20px; }
-        .modal-close {
-            position: absolute; top: 14px; right: 14px;
-            background: none; border: none; cursor: pointer;
-            font-size: 1.2rem; color: var(--c-muted); line-height: 1;
-            padding: 4px;
-        }
-        .modal-close:hover { color: var(--c-text); }
+/* ── 关键 CSS：首屏渲染必需样式 ── */
+.page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin: 4px 0 6px;
+}
+.page-header h1 {
+    margin: 0; flex: 1; text-align: center;
+    font-size: clamp(1.1rem, 4vw, 1.6rem);
+}
+.header-side { min-width: 80px; }
+.header-side.right { text-align: right; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.side-label { font-size: 0.82rem; color: var(--c-hint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.icon-btn {
+    padding: 5px 10px; background: transparent;
+    border: 1px solid var(--c-border);
+    border-radius: 6px; cursor: pointer; color: var(--c-text);
+    font-size: 1rem; line-height: 1; white-space: nowrap;
+}
+body { padding: 10px; }
+.container {
+    max-width: 1400px; margin: 0 auto;
+    background: var(--c-surface);
+    padding: clamp(10px, 3vw, 20px);
+    border-radius: 8px;
+}
+.week-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; margin: 6px 0 4px;
+}
+.week-bar button {
+    padding: 6px 14px;
+    border: 1px solid var(--c-border);
+    background: var(--c-input);
+    color: var(--c-text); border-radius: 4px; cursor: pointer; font-size: 0.9rem;
+}
+#current-week { font-size: 1rem; font-weight: 500; min-width: 64px; text-align: center; }
+.meta { text-align: center; color: var(--c-muted); margin: 8px 0; font-size: clamp(0.72rem, 2vw, 0.88rem); }
+.timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.timetable {
+    display: grid;
+    grid-template-columns: 52px repeat(7, minmax(72px, 1fr));
+    grid-template-rows: 50px 62px 62px 62px 62px 3px 62px 62px 62px 62px 3px 62px 62px;
+    gap: 1px;
+    background: var(--c-grid);
+    border: 1px solid var(--c-grid);
+    min-width: 600px;
+    max-width: 800px;
+    margin: 0 auto;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.cell { background: var(--c-surface); padding: 6px; overflow: hidden; position: relative; z-index: 1; display: flex; }
+.header {
+    background: var(--c-primary);
+    color: white; font-weight: bold; text-align: center;
+    padding: 8px; font-size: clamp(0.82rem, 2vw, 0.96rem);
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.2;
+}
+.header-today {
+    filter: brightness(1.2) saturate(1.1);
+    box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.3);
+}
+.time-slot {
+    background: var(--c-subtle);
+    font-size: clamp(0.72rem, 1.6vw, 0.82rem);
+    text-align: center;
+    font-weight: bold;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+.course {
+    background: var(--c-course);
+    border-left: 3px solid var(--c-accent);
+    padding: 5px 6px;
+    font-size: clamp(0.66rem, 1.8vw, 0.78rem);
+    height: 100%;
+    overflow: hidden;
+    cursor: pointer;
+}
+.course-name { font-weight: bold; margin-bottom: 2px; line-height: 1.3; }
+.course-info {
+    opacity: 0.8;
+    font-size: clamp(0.56rem, 1.4vw, 0.62rem);
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+@media (max-width: 768px) {
+    .cell { padding: 4px; }
+    .course { padding: 4px 5px; }
+}
     </style>
+    <!-- 非关键 CSS 异步加载：交互效果和弹窗样式 -->
+    <link rel="preload" href="/non-critical.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="/non-critical.css"></noscript>
 </head>
 <body>
     <div class="container">

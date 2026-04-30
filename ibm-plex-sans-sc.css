@@ -1,7 +1,9 @@
 /* IBM Plex Sans SC - Simplified Chinese */
+/* 优先使用本地字体，失败时回退到 CDN */
 @font-face {
     font-family: 'IBM Plex Sans SC';
-    src: url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Regular.woff2') format('woff2');
+    src: url('/fonts/IBMPlexSansSC-Regular.woff2') format('woff2'),
+         url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Regular.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
     font-display: swap;
@@ -9,7 +11,8 @@
 
 @font-face {
     font-family: 'IBM Plex Sans SC';
-    src: url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Medium.woff2') format('woff2');
+    src: url('/fonts/IBMPlexSansSC-Medium.woff2') format('woff2'),
+         url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Medium.woff2') format('woff2');
     font-weight: 500;
     font-style: normal;
     font-display: swap;
@@ -17,7 +20,8 @@
 
 @font-face {
     font-family: 'IBM Plex Sans SC';
-    src: url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-SemiBold.woff2') format('woff2');
+    src: url('/fonts/IBMPlexSansSC-SemiBold.woff2') format('woff2'),
+         url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-SemiBold.woff2') format('woff2');
     font-weight: 600;
     font-style: normal;
     font-display: swap;
@@ -25,7 +29,8 @@
 
 @font-face {
     font-family: 'IBM Plex Sans SC';
-    src: url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Bold.woff2') format('woff2');
+    src: url('/fonts/IBMPlexSansSC-Bold.woff2') format('woff2'),
+         url('https://font.rainlodyn.cn/ibm-plex-sans-sc/IBMPlexSansSC-Bold.woff2') format('woff2');
     font-weight: 700;
     font-style: normal;
     font-display: swap;

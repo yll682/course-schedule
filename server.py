@@ -123,6 +123,18 @@ def set_security_headers(response):
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
 
+    # 添加静态资源缓存头（性能优化）
+    path = request.path
+    # 字体文件：长期缓存（1年）
+    if path.startswith('/fonts/') and path.endswith('.woff2'):
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    # CSS、JS、静态页面：中等缓存（1天）
+    elif path.endswith('.css') or path.endswith('.js') or path in ['/index.html', '/login.html', '/admin.html']:
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+    # 图片、manifest：中等缓存
+    elif path.endswith('.svg') or path.endswith('.png') or path.endswith('.jpg') or path == '/manifest.json':
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+
     # 添加 Content-Security-Policy
     # 注意：这是一个严格的 CSP 策略，只允许同源资源
     # 如果需要加载外部资源，需要根据实际情况调整

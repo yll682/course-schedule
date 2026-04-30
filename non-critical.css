@@ -1,0 +1,46 @@
+/* ── 非关键 CSS：延迟加载样式 ── */
+
+/* ── 交互效果（不影响首屏渲染） ── */
+.icon-btn:hover { background: var(--c-hover); }
+.icon-btn.capture-mode { min-width: 46px; }
+.week-bar button:hover { background: var(--c-hover2); }
+.course:active { filter: brightness(0.93); }
+.course-info { transition: font-size 0.1s ease; }
+
+/* ── 深色模式特殊样式 ── */
+@media (prefers-color-scheme: dark) {
+    .header-today {
+        filter: brightness(1.3) saturate(1.15);
+        box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.2);
+    }
+}
+
+/* ── 课程详情弹窗（默认隐藏） ── */
+.modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45); z-index: 1000;
+    align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+    background: var(--c-surface); border-radius: 12px;
+    padding: 24px 20px 20px; max-width: 360px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+    position: relative;
+}
+.modal-title {
+    font-size: 1.1rem; font-weight: bold; margin: 0 0 14px;
+    padding-right: 28px; line-height: 1.4; color: var(--c-text);
+}
+.modal-row {
+    display: flex; gap: 8px; margin: 6px 0;
+    font-size: 0.9rem; color: var(--c-text);
+}
+.modal-row .icon { flex-shrink: 0; width: 20px; }
+.modal-close {
+    position: absolute; top: 14px; right: 14px;
+    background: none; border: none; cursor: pointer;
+    font-size: 1.2rem; color: var(--c-muted); line-height: 1;
+    padding: 4px;
+}
+.modal-close:hover { color: var(--c-text); }
