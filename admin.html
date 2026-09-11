@@ -88,6 +88,77 @@
             box-sizing: border-box;
             height: 38px;
         }
+        .field textarea {
+            width: 100%; padding: 8px 11px;
+            border: 1px solid var(--c-border-input); border-radius: 8px;
+            background: var(--c-input); color: var(--c-text); font-size: 0.88rem;
+            font-family: inherit; line-height: 1.5;
+            transition: border-color 0.15s;
+            box-sizing: border-box; resize: vertical; min-height: 88px;
+        }
+        .field textarea:focus { outline: none; border-color: var(--c-primary); }
+        .field textarea:disabled {
+            background: var(--c-disabled-bg);
+            color: var(--c-disabled-text);
+            cursor: not-allowed;
+        }
+        .field .counter { font-size: 0.72rem; color: var(--c-muted); text-align: right; margin-top: 3px; }
+        .field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .field-row .field { flex: 1 1 160px; }
+        .check-line { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--c-text); cursor: pointer; }
+        .check-line input { width: auto; height: auto; margin: 0; }
+
+        /* ── 富文本编辑器 ── */
+        .rte { border: 1px solid var(--c-border-input); border-radius: 8px; background: var(--c-input); overflow: hidden; }
+        .rte.disabled { opacity: 0.6; pointer-events: none; }
+        .rte-toolbar {
+            display: flex; flex-wrap: wrap; gap: 2px; padding: 6px;
+            border-bottom: 1px solid var(--c-border-soft); background: var(--c-surface);
+        }
+        .rte-toolbar button, .rte-toolbar label {
+            min-width: 30px; height: 28px; padding: 0 8px;
+            border: 1px solid transparent; border-radius: 6px; background: transparent;
+            color: var(--c-text); font-size: 0.8rem; font-family: inherit; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .rte-toolbar button:hover, .rte-toolbar label:hover { background: var(--c-hover); }
+        .rte-toolbar button.active { border-color: var(--c-primary); color: var(--c-primary); }
+        .rte-toolbar .sep { width: 1px; background: var(--c-border-soft); margin: 4px 3px; }
+        .rte-toolbar input[type=color] { width: 20px; height: 18px; padding: 0; border: none; background: none; cursor: pointer; }
+        .rte-editor {
+            min-height: 140px; max-height: 360px; overflow: auto;
+            padding: 10px 12px; font-size: 0.88rem; line-height: 1.55; color: var(--c-text);
+            outline: none; word-break: break-word;
+        }
+        .rte-editor:empty::before { content: attr(data-placeholder); color: var(--c-muted); }
+        .rte-editor img { max-width: 100%; height: auto; }
+        .rte-editor a { color: var(--c-primary); }
+        .rte-editor blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--c-border); color: var(--c-muted); }
+        .rte-editor pre, .rte-editor code { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; }
+        .rte-editor .ad-slot { border: 1px dashed var(--c-border); padding: 8px; text-align: center; color: var(--c-muted); }
+        .rte-source {
+            display: none; width: 100%; min-height: 140px; max-height: 360px;
+            padding: 10px 12px; border: none; background: var(--c-input); color: var(--c-text);
+            font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; line-height: 1.5;
+            resize: vertical; box-sizing: border-box; outline: none;
+        }
+        .rte.source-mode .rte-editor { display: none; }
+        .rte.source-mode .rte-source { display: block; }
+        .ad-preview {
+            margin-top: 8px; padding: 10px; border: 1px dashed var(--c-border); border-radius: 8px;
+            font-size: 0.85rem; color: var(--c-text); min-height: 32px;
+        }
+        .ad-preview:empty::before { content: '（广告位预览：暂无内容）'; color: var(--c-muted); font-size: 0.78rem; }
+        .ad-preview img { max-width: 100%; height: auto; }
+        .notice-label { font-size: 0.74rem; color: var(--c-muted); margin: 0 0 4px; }
+        .notice-body + .notice-label { margin-top: 12px; }
+        .notice-body { font-size: 0.86rem; line-height: 1.6; color: var(--c-text); word-break: break-word; }
+        .notice-body p, .notice-body h1, .notice-body h2, .notice-body h3, .notice-body h4 { margin: 0 0 4px; }
+        .notice-body h1 { font-size: 1.15em; } .notice-body h2 { font-size: 1.1em; } .notice-body h3, .notice-body h4 { font-size: 1.02em; }
+        .notice-body ul, .notice-body ol { margin: 4px 0; padding-left: 1.4em; }
+        .notice-body img { max-width: 100%; height: auto; }
+        .notice-body a { color: var(--c-primary); }
+        .notice-body blockquote { margin: 4px 0; padding: 2px 10px; border-left: 3px solid var(--c-border); color: var(--c-muted); }
         .field input:focus, .field select:focus {
             outline: none; border-color: var(--c-primary);
         }
@@ -440,6 +511,27 @@
         </div>
 
         <!-- ── 分享码（所有用户）── -->
+        <div class="card" id="notice-card">
+            <div class="card-header">
+                <h2>公告</h2>
+                <span class="badge badge-user">所有用户</span>
+            </div>
+            <div class="card-body">
+                <button class="advanced-toggle" type="button" onclick="toggleNoticePanel()" aria-expanded="false" id="notice-toggle">
+                    <span class="advanced-toggle-title" id="notice-toggle-title">查看当前公告</span>
+                    <span class="advanced-toggle-icon">▾</span>
+                </button>
+                <div class="advanced-panel" id="notice-panel">
+                    <div id="notice-body">加载中...</div>
+                    <div id="notice-actions" style="display:none;margin-top:12px">
+                        <div class="hint" id="notice-actions-hint" style="margin-bottom:8px"></div>
+                        <button class="btn btn-default btn-sm" onclick="restoreNotice()">在课表页重新显示</button>
+                    </div>
+                    <span class="save-status" id="notice-restore-status" style="display:inline-block;margin-top:8px">✓ 已恢复，返回课表页即可看到</span>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h2>分享码</h2>
@@ -514,6 +606,144 @@
                         <span class="save-status" id="admin-save-status">✓ 已保存</span>
                     </div>
                     <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled>立即抓取所有用户</button>
+                </div>
+
+                <!-- 公告栏 -->
+                <div class="divider"></div>
+                <div class="section-label" style="margin-bottom:6px">公告栏</div>
+                <div class="hint">横幅与弹窗是两套独立公告，可分别编辑、分别启用，也可同时启用。均显示给所有用户（含分享浏览模式）。支持加粗、颜色、链接、图片、列表等，允许部分 HTML 标签（p/div/span/a/img/ul/ol/h1-h4/blockquote/code 等），脚本、iframe、事件属性会在保存时被服务端过滤。</div>
+                <div class="section-label" style="margin:14px 0 10px">顶部横幅公告</div>
+                <div class="field">
+                    <label class="check-line">
+                        <input type="checkbox" id="ann-banner-enabled" disabled>
+                        <span>启用顶部横幅公告</span>
+                    </label>
+                    <div class="hint">常驻在课表页顶部、课表上方。</div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>展示次数（每位用户）</label>
+                        <input type="number" id="ann-banner-max-views" value="0" min="0" max="999" disabled>
+                        <div class="hint">按课表页打开次数统计。0 = 每次打开都显示；N = 最多显示 N 次，本公告更新后重新计数。</div>
+                    </div>
+                    <div class="field">
+                        <label class="check-line" style="margin-top:26px">
+                            <input type="checkbox" id="ann-banner-dismissible" checked disabled>
+                            <span>允许用户关闭</span>
+                        </label>
+                        <div class="hint">横幅的 ✕ 会记住关闭状态，直到本公告更新或用户在设置页「公告」中恢复。</div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>顶部横幅公告内容</label>
+                    <div class="rte disabled" id="ann-banner-rte">
+                        <div class="rte-toolbar">
+                            <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
+                            <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
+                            <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
+                            <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
+                            <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
+                            <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
+                            <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
+                            <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
+                            <span class="sep"></span>
+                            <label title="文字颜色">A<input type="color" id="ann-banner-color" value="#d4380d"></label>
+                            <button type="button" data-cmd="link" title="插入链接">🔗</button>
+                            <button type="button" data-cmd="image" title="插入图片">🖼</button>
+                            <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
+                            <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="source" id="ann-banner-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+                        </div>
+                        <div class="rte-editor" id="ann-banner-editor" contenteditable="true" data-placeholder="输入顶部横幅公告内容，支持富文本…"></div>
+                        <textarea class="rte-source" id="ann-banner-source" spellcheck="false" placeholder="HTML 源码"></textarea>
+                    </div>
+                    <div class="counter"><span id="ann-banner-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-banner-btn" onclick="clearAnnouncement('banner')" disabled style="margin-left:8px">清空内容</button></div>
+                </div>
+                <div class="section-label" style="margin:14px 0 10px">弹窗公告</div>
+                <div class="field">
+                    <label class="check-line">
+                        <input type="checkbox" id="ann-popup-enabled" disabled>
+                        <span>启用弹窗公告</span>
+                    </label>
+                    <div class="hint">打开课表页时以弹窗形式弹出。</div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>展示次数（每位用户）</label>
+                        <input type="number" id="ann-popup-max-views" value="0" min="0" max="999" disabled>
+                        <div class="hint">按课表页打开次数统计。0 = 每次打开都显示；N = 最多显示 N 次，本公告更新后重新计数。</div>
+                    </div>
+                    <div class="field">
+                        <label class="check-line" style="margin-top:26px">
+                            <input type="checkbox" id="ann-popup-dismissible" checked disabled>
+                            <span>允许用户关闭</span>
+                        </label>
+                        <div class="hint">弹窗的关闭仅对本次访问有效，下次打开课表页仍会弹出（受展示次数限制）。关闭后用户仍可在设置页「公告」中查看。</div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>弹窗公告内容</label>
+                    <div class="rte disabled" id="ann-popup-rte">
+                        <div class="rte-toolbar">
+                            <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
+                            <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
+                            <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
+                            <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
+                            <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
+                            <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
+                            <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
+                            <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
+                            <span class="sep"></span>
+                            <label title="文字颜色">A<input type="color" id="ann-popup-color" value="#d4380d"></label>
+                            <button type="button" data-cmd="link" title="插入链接">🔗</button>
+                            <button type="button" data-cmd="image" title="插入图片">🖼</button>
+                            <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
+                            <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="source" id="ann-popup-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+                        </div>
+                        <div class="rte-editor" id="ann-popup-editor" contenteditable="true" data-placeholder="输入弹窗公告内容，支持富文本…"></div>
+                        <textarea class="rte-source" id="ann-popup-source" spellcheck="false" placeholder="HTML 源码"></textarea>
+                    </div>
+                    <div class="counter"><span id="ann-popup-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-popup-btn" onclick="clearAnnouncement('popup')" disabled style="margin-left:8px">清空内容</button></div>
+                </div>
+
+                <div class="section-label" style="margin:14px 0 10px">广告位（预留）</div>
+                <div class="field">
+                    <label class="check-line">
+                        <input type="checkbox" id="ann-ad-enabled" disabled>
+                        <span>启用广告位</span>
+                    </label>
+                    <div class="hint">当前仅为占位，无实际投放逻辑。填入 HTML 片段后即按位置展示，可用于后续接入广告代码（同样受服务端白名单过滤）。与两套公告是否启用无关。</div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>广告位位置</label>
+                        <select id="ann-ad-position" disabled>
+                            <option value="page_below">课表页 · 横幅公告下方（无横幅时在课表上方）</option>
+                            <option value="page_above">课表页 · 横幅公告上方</option>
+                            <option value="banner_inside">横幅公告内部 · 正文下方</option>
+                            <option value="popup_inside">弹窗公告内部 · 正文下方</option>
+                        </select>
+                        <div class="hint">「横幅内部」在横幅未显示时退回到横幅下方位置；「弹窗内部」仅在弹窗弹出时可见。前两项始终显示在课表页。</div>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>广告位 HTML</label>
+                    <textarea id="ann-ad-html" maxlength="5000" placeholder='例如：&lt;div class="ad-slot"&gt;广告位招租&lt;/div&gt;' disabled oninput="updateAdPreview()"></textarea>
+                    <div class="counter"><span id="ann-ad-count">0</span>/5000</div>
+                    <div class="ad-preview" id="ann-ad-preview"></div>
+                </div>
+                <div class="admin-btn-group" style="margin-top:4px">
+                    <div class="admin-btn-group-left">
+                        <button class="btn btn-primary" id="save-announcement-btn" onclick="saveAnnouncement()" disabled>保存公告设置</button>
+                        <span class="save-status" id="announcement-save-status">✓ 已保存</span>
+                    </div>
                 </div>
 
                 <!-- 服务管理 -->
@@ -854,6 +1084,8 @@
                 document.getElementById('save-admin-btn').disabled = false;
                 document.getElementById('force-fetch-btn').disabled = false;
                 document.getElementById('restart-btn').disabled = false;
+                setAnnouncementEnabled(true);
+                loadAnnouncementConfig();
                 loadGroups();
                 loadAdminShares();
                 loadUsers();
@@ -866,6 +1098,7 @@
             loadAdvancedOptions();
             loadIcsSubscription();
             loadShares();
+            loadNoticeCard();
 
             // 监听系统色彩模式变化
             window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
@@ -904,6 +1137,270 @@
                 btn.disabled = false; btn.textContent = '保存';
             }
         }
+
+        // ── 公告查看（所有用户） ─────────────────────────────────────────────
+        const NOTICE_STATE_KEY = 'schedule_announcement_state';   // 与 index.html 共用
+
+        function toggleNoticePanel() {
+            const panel = document.getElementById('notice-panel');
+            const toggle = document.getElementById('notice-toggle');
+            const open = !panel.classList.contains('open');
+            panel.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        function readNoticeState() {
+            try { return JSON.parse(localStorage.getItem(NOTICE_STATE_KEY)) || {}; } catch (_) { return {}; }
+        }
+
+        async function loadNoticeCard() {
+            const body = document.getElementById('notice-body');
+            const title = document.getElementById('notice-toggle-title');
+            const actions = document.getElementById('notice-actions');
+            const hint = document.getElementById('notice-actions-hint');
+            try {
+                const resp = await fetch('/api/announcement', { credentials: 'include' });
+                if (!resp.ok) throw new Error(resp.status);
+                const data = await resp.json();
+                const forms = [['banner', '顶部横幅'], ['popup', '弹窗']];
+                const parts = [];
+                forms.forEach(([f, label]) => {
+                    const c = data[f];
+                    if (!c || !c.enabled || !c.content) return;
+                    // 公告 HTML 已由服务端白名单净化
+                    parts.push(`<div class="notice-label">${label}</div><div class="notice-body">${c.content}</div>`);
+                });
+                if (!parts.length) {
+                    body.innerHTML = '<span style="color:var(--c-muted)">当前没有公告</span>';
+                    title.textContent = '查看当前公告';
+                    actions.style.display = 'none';
+                    return;
+                }
+                body.innerHTML = parts.join('');
+
+                const st = readNoticeState();
+                const exhausted = f => {
+                    const c = data[f], s = st[f];
+                    return !!(c && c.enabled && s && s.version === (c.updated_at || '1')
+                              && c.max_views > 0 && s.views >= c.max_views);
+                };
+                const b = data.banner, bs = st.banner;
+                const bannerDismissed = !!(b && b.enabled && bs && bs.version === (b.updated_at || '1') && bs.dismissed);
+                if (bannerDismissed) {
+                    hint.textContent = '你已关闭课表页顶部的横幅公告。';
+                    title.textContent = '查看当前公告（已关闭横幅）';
+                    actions.style.display = 'block';
+                } else if (exhausted('banner') || exhausted('popup')) {
+                    hint.textContent = '公告已达到展示次数上限，课表页不再显示。';
+                    title.textContent = '查看当前公告';
+                    actions.style.display = 'block';
+                } else {
+                    title.textContent = '查看当前公告';
+                    actions.style.display = 'none';
+                }
+            } catch (e) {
+                body.innerHTML = '<span style="color:var(--c-muted)">公告加载失败</span>';
+            }
+        }
+
+        function restoreNotice() {
+            // 清除本地状态：横幅关闭标记与两套公告的展示计数都重置
+            try { localStorage.removeItem(NOTICE_STATE_KEY); } catch (_) {}
+            document.getElementById('notice-actions').style.display = 'none';
+            document.getElementById('notice-toggle-title').textContent = '查看当前公告';
+            const s = document.getElementById('notice-restore-status');
+            s.classList.add('show');
+            setTimeout(() => s.classList.remove('show'), 3000);
+        }
+
+        // ── 公告栏配置（横幅 / 弹窗 两套独立公告 + 广告位） ──────────────────
+        const ANN_FORMS = ['banner', 'popup'];
+        const ANN_LABELS = { banner: '横幅公告', popup: '弹窗公告' };
+        const ANN_IDS = [
+            ...ANN_FORMS.flatMap(f => [`ann-${f}-enabled`, `ann-${f}-max-views`, `ann-${f}-dismissible`, `clear-${f}-btn`]),
+            'ann-ad-enabled', 'ann-ad-position', 'ann-ad-html', 'save-announcement-btn',
+        ];
+
+        function annEl(form, part) { return document.getElementById(`ann-${form}-${part}`); }
+
+        function setAnnouncementEnabled(on) {
+            ANN_IDS.forEach(id => { document.getElementById(id).disabled = !on; });
+            ANN_FORMS.forEach(f => {
+                annEl(f, 'rte').classList.toggle('disabled', !on);
+                annEl(f, 'editor').contentEditable = on ? 'true' : 'false';
+            });
+        }
+
+        function annIsSourceMode(form) { return annEl(form, 'rte').classList.contains('source-mode'); }
+
+        function getAnnouncementHtml(form) {
+            return annIsSourceMode(form) ? annEl(form, 'source').value : annEl(form, 'editor').innerHTML;
+        }
+
+        function setAnnouncementHtml(form, html) {
+            annEl(form, 'editor').innerHTML = html || '';
+            annEl(form, 'source').value = html || '';
+            updateAnnouncementCounter(form);
+        }
+
+        function updateAnnouncementCounter(form) {
+            annEl(form, 'count').textContent = getAnnouncementHtml(form).length;
+        }
+
+        function updateAdPreview() {
+            const html = document.getElementById('ann-ad-html').value;
+            document.getElementById('ann-ad-count').textContent = html.length;
+            // 预览为本地渲染，仅管理员自己可见；最终以服务端净化结果为准
+            document.getElementById('ann-ad-preview').innerHTML = html;
+        }
+
+        function toggleAnnouncementSource(form) {
+            const rte = annEl(form, 'rte');
+            if (annIsSourceMode(form)) {
+                annEl(form, 'editor').innerHTML = annEl(form, 'source').value;
+                rte.classList.remove('source-mode');
+            } else {
+                annEl(form, 'source').value = annEl(form, 'editor').innerHTML;
+                rte.classList.add('source-mode');
+            }
+            annEl(form, 'source-btn').classList.toggle('active', annIsSourceMode(form));
+            updateAnnouncementCounter(form);
+        }
+
+        function initAnnouncementEditor(form) {
+            const editor = annEl(form, 'editor');
+            const toolbar = annEl(form, 'rte').querySelector('.rte-toolbar');
+            // 防止点击工具栏时编辑器失焦导致选区丢失
+            toolbar.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
+            toolbar.addEventListener('click', e => {
+                const btn = e.target.closest('button[data-cmd]');
+                if (!btn) return;
+                const cmd = btn.dataset.cmd;
+                if (cmd === 'source') { toggleAnnouncementSource(form); return; }
+                if (annIsSourceMode(form)) return;
+                editor.focus();
+                if (cmd === 'link') {
+                    const url = prompt('链接地址（http/https）：', 'https://');
+                    if (!url) return;
+                    if (!/^https?:\/\//i.test(url)) { alert('仅支持 http/https 链接'); return; }
+                    const sel = window.getSelection();
+                    if (!sel || sel.isCollapsed) {
+                        document.execCommand('insertHTML', false,
+                            `<a href="${esc(url)}" target="_blank">${esc(url)}</a>`);
+                    } else {
+                        document.execCommand('createLink', false, url);
+                    }
+                } else if (cmd === 'image') {
+                    const url = prompt('图片地址（https）：', 'https://');
+                    if (!url) return;
+                    if (!/^https?:\/\//i.test(url)) { alert('仅支持 http/https 图片'); return; }
+                    document.execCommand('insertHTML', false, `<img src="${esc(url)}" alt="">`);
+                } else if (cmd === 'formatBlock') {
+                    document.execCommand('formatBlock', false, btn.dataset.val);
+                } else {
+                    document.execCommand(cmd, false, null);
+                }
+                updateAnnouncementCounter(form);
+            });
+            annEl(form, 'color').addEventListener('input', e => {
+                if (annIsSourceMode(form)) return;
+                editor.focus();
+                document.execCommand('foreColor', false, e.target.value);
+                updateAnnouncementCounter(form);
+            });
+            editor.addEventListener('input', () => updateAnnouncementCounter(form));
+            annEl(form, 'source').addEventListener('input', () => updateAnnouncementCounter(form));
+            // 粘贴时只保留纯文本，避免带入外部页面的杂乱样式
+            editor.addEventListener('paste', e => {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+                document.execCommand('insertText', false, text);
+            });
+        }
+
+        function applyAnnouncementConfig(cfg) {
+            ANN_FORMS.forEach(f => {
+                const c = cfg[f] || {};
+                annEl(f, 'enabled').checked = !!c.enabled;
+                annEl(f, 'max-views').value = c.max_views ?? 0;
+                annEl(f, 'dismissible').checked = c.dismissible !== false;
+                setAnnouncementHtml(f, c.content || '');
+            });
+            document.getElementById('ann-ad-enabled').checked = !!cfg.ad_enabled;
+            document.getElementById('ann-ad-position').value = cfg.ad_position || 'page_below';
+            document.getElementById('ann-ad-html').value = cfg.ad_html || '';
+            updateAdPreview();
+        }
+
+        async function loadAnnouncementConfig() {
+            try {
+                const resp = await fetch('/api/admin/announcement', { credentials: 'include' });
+                const data = await resp.json();
+                if (data.success) applyAnnouncementConfig(data.config);
+            } catch (e) {
+                console.warn('加载公告配置失败', e);
+            }
+        }
+
+        function hasVisibleContent(html) {
+            return !!html.replace(/<[^>]*>/g, '').trim() || /<img/i.test(html);
+        }
+
+        async function saveAnnouncement() {
+            const payload = {
+                ad_enabled:  document.getElementById('ann-ad-enabled').checked,
+                ad_position: document.getElementById('ann-ad-position').value,
+                ad_html:     document.getElementById('ann-ad-html').value.trim(),
+            };
+            for (const f of ANN_FORMS) {
+                const maxViews = parseInt(annEl(f, 'max-views').value, 10);
+                if (isNaN(maxViews) || maxViews < 0 || maxViews > 999) {
+                    alert(`${ANN_LABELS[f]}的展示次数需在 0 到 999 之间`); return;
+                }
+                payload[f] = {
+                    enabled:     annEl(f, 'enabled').checked,
+                    max_views:   maxViews,
+                    dismissible: annEl(f, 'dismissible').checked,
+                    content:     getAnnouncementHtml(f).trim(),
+                };
+                if (payload[f].enabled && !hasVisibleContent(payload[f].content)) {
+                    alert(`${ANN_LABELS[f]}已启用但内容为空，请填写内容或取消启用`); return;
+                }
+            }
+            const btn = document.getElementById('save-announcement-btn');
+            btn.disabled = true; btn.textContent = '保存中...';
+            try {
+                const resp = await safeFetch('/api/admin/announcement', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    // 回填服务端净化后的内容，让管理员看到最终效果
+                    applyAnnouncementConfig(data.config);
+                    loadNoticeCard();
+                    const s = document.getElementById('announcement-save-status');
+                    s.classList.add('show');
+                    setTimeout(() => s.classList.remove('show'), 2500);
+                } else {
+                    alert(data.message || data.error || '保存失败');
+                }
+            } catch (e) {
+                alert('保存失败，请检查网络');
+            } finally {
+                btn.disabled = false; btn.textContent = '保存公告设置';
+            }
+        }
+
+        function clearAnnouncement(form) {
+            if (!getAnnouncementHtml(form).trim()) return;
+            if (!confirm(`确定清空${ANN_LABELS[form]}内容？（保存后生效）`)) return;
+            setAnnouncementHtml(form, '');
+            annEl(form, 'enabled').checked = false;
+        }
+
+        ANN_FORMS.forEach(initAnnouncementEditor);
 
         async function forceFetch() {
             const btn = document.getElementById('force-fetch-btn');

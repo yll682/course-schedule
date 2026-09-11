@@ -19,6 +19,11 @@ from werkzeug.security import safe_join
 
 import jw_client
 
+try:
+    import nh3  # HTML 净化（公告富文本）
+except ImportError:  # pragma: no cover
+    nh3 = None
+
 # ── CSRF 保护 ──────────────────────────────────────────────────────────────────
 def generate_csrf_token():
     """生成 CSRF token 并存储在 session 中"""
@@ -829,6 +834,249 @@ def settings():
             pass
     result['max_week'] = max_week
     return jsonify(result)
+
+
+# ── 公告栏 ────────────────────────────────────────────────────────────────────
+ANNOUNCEMENT_SETTING_KEY  = 'announcement'
+ANNOUNCEMENT_CONTENT_MAX  = 10000   # 公告 HTML 最大长度
+ANNOUNCEMENT_AD_MAX       = 5000    # 广告位 HTML 最大长度
+ANNOUNCEMENT_FORMS        = ('banner', 'popup')   # 两套独立公告：顶部横幅 / 弹窗
+# 广告位位置：课表页横幅上方 / 课表页横幅下方 / 横幅公告内部末尾 / 弹窗公告内部末尾
+ANNOUNCEMENT_AD_POSITIONS = ('page_above', 'page_below', 'banner_inside', 'popup_inside')
+_LEGACY_AD_POSITIONS      = {'above': 'page_above', 'below': 'page_below', 'inside': 'banner_inside'}
+
+# 允许的 HTML 标签/属性白名单（富文本 + 预留广告位）
+_HTML_ALLOWED_TAGS = {
+    'a', 'b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'br', 'p', 'div', 'span',
+    'font', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'hr',
+    'img', 'small', 'mark', 'sup', 'sub',
+}
+_HTML_ALLOWED_ATTRS = {
+    '*':    {'class', 'style', 'title'},
+    'a':    {'href', 'target'},
+    'img':  {'src', 'alt', 'width', 'height', 'loading'},
+    'font': {'color', 'size', 'face'},
+    'p':    {'align'},
+    'div':  {'align'},
+    'h1':   {'align'}, 'h2': {'align'}, 'h3': {'align'}, 'h4': {'align'},
+}
+_CSS_ALLOWED_PROPS = {
+    'color', 'background-color', 'background', 'font-size', 'font-weight', 'font-style',
+    'font-family', 'text-align', 'text-decoration', 'line-height', 'letter-spacing',
+    'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'width', 'max-width', 'min-width', 'height', 'max-height',
+    'border', 'border-radius', 'border-color', 'border-width', 'border-style',
+    'display', 'text-indent', 'white-space', 'opacity', 'vertical-align',
+}
+_CSS_FORBIDDEN_RE = re.compile(r'url\s*\(|expression|javascript|@import|behavior|\\|<|>', re.I)
+
+
+def _sanitize_style(value: str):
+    """仅保留白名单 CSS 属性，去掉可能引入外部资源/脚本的写法"""
+    kept = []
+    for decl in value.split(';'):
+        if ':' not in decl:
+            continue
+        prop, val = decl.split(':', 1)
+        prop, val = prop.strip().lower(), val.strip()
+        if prop in _CSS_ALLOWED_PROPS and val and not _CSS_FORBIDDEN_RE.search(val):
+            kept.append(f'{prop}: {val}')
+    return '; '.join(kept) if kept else None
+
+
+def _html_attribute_filter(element: str, attribute: str, value: str):
+    if attribute == 'style':
+        return _sanitize_style(value)
+    if attribute == 'target':
+        return '_blank' if value == '_blank' else None
+    if attribute == 'loading':
+        return 'lazy'
+    return value
+
+
+def sanitize_html(html: str, max_length: int) -> str:
+    """净化富文本 HTML：白名单标签/属性，链接仅允许 http/https/mailto/tel，样式仅保留安全属性。
+    若未安装 nh3，则退化为纯文本转义（安全优先）。"""
+    if not isinstance(html, str):
+        return ''
+    html = ''.join(ch for ch in html if ord(ch) >= 32 or ch in '\n\r\t')[:max_length].strip()
+    if not html:
+        return ''
+    if nh3 is None:
+        logger.warning('未安装 nh3，公告 HTML 已退化为纯文本')
+        import html as _html
+        return _html.escape(html).replace('\n', '<br>')
+    return nh3.clean(
+        html,
+        tags=_HTML_ALLOWED_TAGS,
+        attributes=_HTML_ALLOWED_ATTRS,
+        url_schemes={'http', 'https', 'mailto', 'tel'},
+        link_rel='noopener noreferrer',
+        attribute_filter=_html_attribute_filter,
+        strip_comments=True,
+    )
+
+
+def _default_announcement_form() -> dict:
+    return {
+        'enabled':     False,
+        'content':     '',      # 已净化的 HTML
+        'max_views':   0,       # 每位用户最多展示次数（按课表页打开次数），0=不限
+        'dismissible': True,    # 是否允许用户关闭
+        'updated_at':  '',      # 该公告的版本，前端据此重置"已关闭/展示次数"状态
+    }
+
+
+def _default_announcement() -> dict:
+    return {
+        'banner':      _default_announcement_form(),   # 顶部横幅公告
+        'popup':       _default_announcement_form(),   # 弹窗公告
+        'ad_enabled':  False,          # 广告位（预留）
+        'ad_html':     '',             # 已净化的 HTML
+        'ad_position': 'page_below',   # 见 ANNOUNCEMENT_AD_POSITIONS
+    }
+
+
+def _normalize_announcement_form(form: dict) -> dict:
+    out = _default_announcement_form()
+    out['enabled']     = bool(form.get('enabled', False))
+    out['content']     = form.get('content') if isinstance(form.get('content'), str) else ''
+    out['dismissible'] = bool(form.get('dismissible', True))
+    out['updated_at']  = form.get('updated_at') if isinstance(form.get('updated_at'), str) else ''
+    try:
+        out['max_views'] = min(999, max(0, int(form.get('max_views', 0))))
+    except (ValueError, TypeError):
+        out['max_views'] = 0
+    return out
+
+
+def _load_announcement() -> dict:
+    cfg = _default_announcement()
+    raw = get_setting(ANNOUNCEMENT_SETTING_KEY, '')
+    saved = None
+    if raw:
+        try:
+            saved = json.loads(raw)
+        except (ValueError, TypeError):
+            logger.warning('公告配置解析失败，使用默认值')
+    if isinstance(saved, dict):
+        if any(k in saved for k in ANNOUNCEMENT_FORMS):
+            for form in ANNOUNCEMENT_FORMS:
+                if isinstance(saved.get(form), dict):
+                    cfg[form] = _normalize_announcement_form(saved[form])
+        else:
+            # 旧版单公告配置（enabled/mode/content/...）：按 mode 拆到横幅/弹窗
+            mode = str(saved.get('mode', 'banner'))
+            targets = ANNOUNCEMENT_FORMS if mode == 'both' else ((mode,) if mode in ANNOUNCEMENT_FORMS else ('banner',))
+            for form in targets:
+                cfg[form] = _normalize_announcement_form(saved)
+        cfg['ad_enabled'] = bool(saved.get('ad_enabled', False))
+        cfg['ad_html']    = saved.get('ad_html') if isinstance(saved.get('ad_html'), str) else ''
+        pos = str(saved.get('ad_position', 'page_below'))
+        cfg['ad_position'] = _LEGACY_AD_POSITIONS.get(pos, pos)   # 兼容旧版位置取值
+    if cfg['ad_position'] not in ANNOUNCEMENT_AD_POSITIONS:
+        cfg['ad_position'] = 'page_below'
+    return cfg
+
+
+@app.route('/api/announcement', methods=['GET'])
+def get_announcement():
+    """获取公告展示配置（登录用户与分享浏览模式均可读取）"""
+    if 'username' not in session and 'share_token' not in session:
+        return jsonify({'error': '未登录'}), 401
+    cfg = _load_announcement()
+    out = {}
+    for form in ANNOUNCEMENT_FORMS:
+        f = cfg[form]
+        show = bool(f['enabled'] and f['content'])
+        out[form] = {
+            'enabled':     show,
+            'content':     f['content'] if show else '',
+            'max_views':   f['max_views'],
+            'dismissible': f['dismissible'],
+            'updated_at':  f['updated_at'],
+        }
+    show_ad = bool(cfg['ad_enabled'] and cfg['ad_html'])
+    out['ad_enabled']  = show_ad
+    out['ad_html']     = cfg['ad_html'] if show_ad else ''
+    out['ad_position'] = cfg['ad_position']
+    return jsonify(out)
+
+
+def _update_announcement_form(cur: dict, data: dict, label: str):
+    """校验并合并单个公告表单的更新，返回 (new_form, error_message)"""
+    new = dict(cur)
+    if 'enabled' in data:
+        new['enabled'] = bool(data['enabled'])
+    if 'max_views' in data:
+        try:
+            max_views = int(data['max_views'])
+        except (ValueError, TypeError):
+            return None, f'{label}展示次数无效'
+        if not (0 <= max_views <= 999):
+            return None, f'{label}展示次数需在 0-999 之间'
+        new['max_views'] = max_views
+    if 'dismissible' in data:
+        new['dismissible'] = bool(data['dismissible'])
+    if 'content' in data:
+        if not isinstance(data['content'], str):
+            return None, f'{label}内容无效'
+        if len(data['content']) > ANNOUNCEMENT_CONTENT_MAX:
+            return None, f'{label}内容超过 {ANNOUNCEMENT_CONTENT_MAX} 字符'
+        new['content'] = sanitize_html(data['content'], ANNOUNCEMENT_CONTENT_MAX)
+    # 内容或展示方式变化时更新该公告的版本，前端据此重置"已关闭/展示次数"状态
+    if any(new[k] != cur[k] for k in ('content', 'max_views', 'dismissible', 'enabled')) or not new['updated_at']:
+        new['updated_at'] = datetime.now().isoformat()
+    return new, None
+
+
+@app.route('/api/admin/announcement', methods=['GET', 'PUT'])
+@csrf_protected
+def admin_announcement():
+    """管理员读取/保存公告栏完整配置（横幅、弹窗、广告位）"""
+    if 'username' not in session or not session.get('is_admin'):
+        return jsonify({'error': '无权限'}), 403
+
+    cfg = _load_announcement()
+    if request.method == 'GET':
+        return jsonify({'success': True, 'config': cfg})
+
+    data = request.json or {}
+    new = dict(cfg)
+
+    labels = {'banner': '横幅公告', 'popup': '弹窗公告'}
+    for form in ANNOUNCEMENT_FORMS:
+        if form in data:
+            if not isinstance(data[form], dict):
+                return jsonify({'success': False, 'message': f'{labels[form]}配置无效'}), 400
+            updated, err = _update_announcement_form(cfg[form], data[form], labels[form])
+            if err:
+                return jsonify({'success': False, 'message': err}), 400
+            new[form] = updated
+
+    if 'ad_enabled' in data:
+        new['ad_enabled'] = bool(data['ad_enabled'])
+    if 'ad_html' in data:
+        if not isinstance(data['ad_html'], str):
+            return jsonify({'success': False, 'message': '广告位内容无效'}), 400
+        if len(data['ad_html']) > ANNOUNCEMENT_AD_MAX:
+            return jsonify({'success': False,
+                            'message': f'广告位内容超过 {ANNOUNCEMENT_AD_MAX} 字符'}), 400
+        new['ad_html'] = sanitize_html(data['ad_html'], ANNOUNCEMENT_AD_MAX)
+    if 'ad_position' in data:
+        pos = str(data['ad_position']).strip().lower()
+        if pos not in ANNOUNCEMENT_AD_POSITIONS:
+            return jsonify({'success': False, 'message': '广告位位置无效'}), 400
+        new['ad_position'] = pos
+
+    with _db() as conn:
+        conn.execute('INSERT OR REPLACE INTO settings VALUES (?, ?)',
+                     (ANNOUNCEMENT_SETTING_KEY, json.dumps(new, ensure_ascii=False)))
+        conn.commit()
+    logger.info('公告配置已更新 by %s: banner=%s popup=%s ad=%s', session['username'],
+                new['banner']['enabled'], new['popup']['enabled'], new['ad_enabled'])
+    return jsonify({'success': True, 'config': new})
 
 
 # ── 分享码 ────────────────────────────────────────────────────────────────────

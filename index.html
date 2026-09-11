@@ -67,6 +67,66 @@ body { padding: 10px; }
 }
 #current-week { font-size: 1rem; font-weight: 500; min-width: 64px; text-align: center; }
 .meta { text-align: center; color: var(--c-muted); margin: 8px 0; font-size: clamp(0.72rem, 2vw, 0.88rem); }
+.announcement {
+    display: none; position: relative;
+    margin: 8px 0; padding: 10px 36px 10px 14px;
+    border-radius: 6px; border: 1px solid #ffd591;
+    background: #fffbe6; color: #613400;
+    font-size: clamp(0.78rem, 2.2vw, 0.9rem); line-height: 1.55;
+    text-align: left; word-break: break-word;
+}
+.announcement.show { display: block; }
+.announcement.no-close { padding-right: 14px; }
+.announcement .announcement-icon { margin-right: 6px; }
+.announcement-close {
+    position: absolute; top: 6px; right: 8px;
+    background: none; border: none; cursor: pointer;
+    color: inherit; opacity: 0.6; font-size: 1rem; line-height: 1; padding: 4px;
+}
+.announcement-close:hover { opacity: 1; }
+.announcement-body { display: inline; }
+.announcement-body p, .announcement-body h1, .announcement-body h2, .announcement-body h3, .announcement-body h4 { margin: 0 0 4px; }
+.announcement-body h1 { font-size: 1.15em; } .announcement-body h2 { font-size: 1.1em; }
+.announcement-body h3, .announcement-body h4 { font-size: 1.02em; }
+.announcement-body ul, .announcement-body ol { margin: 4px 0; padding-left: 1.4em; }
+.announcement-body img { max-width: 100%; height: auto; vertical-align: middle; }
+.announcement-body a { color: inherit; text-decoration: underline; }
+.announcement-body blockquote { margin: 4px 0; padding: 2px 10px; border-left: 3px solid currentColor; opacity: 0.85; }
+.announcement-body pre, .announcement-body code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+.announcement-body hr { border: none; border-top: 1px solid currentColor; opacity: 0.3; margin: 6px 0; }
+.ad-slot-wrap { display: none; margin: 8px 0; }
+.ad-slot-wrap.show { display: block; }
+.ad-slot-wrap.inside { margin: 8px 0 0; }
+.ad-slot-wrap img { max-width: 100%; height: auto; }
+.ad-slot-wrap .ad-slot {
+    border: 1px dashed var(--c-border); border-radius: 6px; padding: 8px 12px;
+    text-align: center; color: var(--c-muted); font-size: 0.8rem;
+}
+/* 弹窗模式 */
+.announcement-overlay {
+    display: none; position: fixed; inset: 0; z-index: 1001;
+    background: rgba(0,0,0,0.45); align-items: center; justify-content: center;
+}
+.announcement-overlay.open { display: flex; }
+.announcement-modal {
+    background: var(--c-surface); color: var(--c-text); border-radius: 12px;
+    padding: 22px 20px 18px; max-width: 420px; width: 90%; max-height: 80vh; overflow: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25); position: relative;
+    font-size: 0.9rem; line-height: 1.6;
+}
+.announcement-modal .announcement-modal-title { font-weight: 600; font-size: 1.05rem; margin: 0 0 10px; padding-right: 28px; }
+.announcement-modal .announcement-close { top: 12px; right: 12px; font-size: 1.15rem; }
+.announcement-modal .announcement-body { display: block; }
+.announcement-modal .announcement-body a { color: var(--c-primary); }
+.announcement-modal-actions { margin-top: 14px; text-align: right; }
+.announcement-modal-actions button {
+    padding: 7px 18px; border-radius: 8px; border: 1px solid var(--c-primary);
+    background: var(--c-primary); color: #fff; cursor: pointer; font-family: inherit; font-size: 0.85rem;
+}
+@media (prefers-color-scheme: dark) {
+    .announcement { background: #3b3216; border-color: #7a5b12; color: #ffe58f; }
+}
+}
 .timetable-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .timetable {
     display: grid;
@@ -158,8 +218,26 @@ body { padding: 10px; }
         </div>
         <div id="cache-warning" style="display:none;background:#fff3cd;color:#856404;padding:10px;border-radius:4px;margin:8px 0;text-align:center"></div>
         <div id="share-banner" style="display:none;background:#e6f4ff;color:#0958d9;padding:10px 14px;border-radius:4px;margin:8px 0;text-align:center;border:1px solid #91caff"></div>
+        <div class="ad-slot-wrap" id="ad-slot-above"></div>
+        <div class="announcement" id="announcement" role="status" aria-live="polite">
+            <button class="announcement-close" id="announcement-close" onclick="dismissBanner()" title="关闭公告（可在设置页恢复）" aria-label="关闭公告">✕</button>
+            <span class="announcement-icon">📢</span><div class="announcement-body" id="announcement-body"></div>
+            <div class="ad-slot-wrap inside" id="ad-slot-inside"></div>
+        </div>
+        <div class="ad-slot-wrap" id="ad-slot-below"></div>
         <div class="meta" id="meta"></div>
         <div class="timetable-wrapper"><div class="timetable" id="timetable"></div></div>
+    </div>
+
+    <!-- 公告弹窗 -->
+    <div class="announcement-overlay" id="announcement-overlay" onclick="if(event.target===this) closeAnnouncementPopup()">
+        <div class="announcement-modal" role="dialog" aria-modal="true" aria-labelledby="announcement-modal-title">
+            <button class="announcement-close" id="announcement-modal-close" onclick="closeAnnouncementPopup()" title="关闭" aria-label="关闭">✕</button>
+            <div class="announcement-modal-title" id="announcement-modal-title">📢 公告</div>
+            <div class="announcement-body" id="announcement-modal-body"></div>
+            <div class="ad-slot-wrap inside" id="ad-slot-modal"></div>
+            <div class="announcement-modal-actions"><button type="button" onclick="closeAnnouncementPopup()">知道了</button></div>
+        </div>
     </div>
 
     <!-- 课程详情弹窗（JS控制初始隐藏） -->
@@ -1032,6 +1110,144 @@ body { padding: 10px; }
             return false;
         }
 
+        // ── 公告栏 ───────────────────────────────────────────────────────────────
+        // 横幅与弹窗是两套独立公告，各有自己的内容、展示次数与版本。
+        // 本地状态：{ banner: {version, views, dismissed}, popup: {version, views} }
+        //   version    该公告的版本（管理员更新内容/展示设置时变化，变化即重置状态）
+        //   views      已展示的页面打开次数
+        //   dismissed  用户是否关闭过横幅（可在设置页恢复）
+        // 弹窗的关闭只在本次页面会话内生效，下次打开仍会弹出。
+        const ANNOUNCEMENT_STATE_KEY = 'schedule_announcement_state';
+        const _annCounted = { banner: '', popup: '' };   // 本次页面会话已计数的版本，避免定时刷新重复计数
+        const _annVersion = { banner: '', popup: '' };
+        let _popupClosedVersion = '';                    // 本次页面会话已关闭弹窗的版本
+
+        function readAnnouncementState() {
+            let st = null;
+            try { st = JSON.parse(localStorage.getItem(ANNOUNCEMENT_STATE_KEY)); } catch (_) {}
+            if (!st || typeof st !== 'object') st = {};
+            if (!st.banner || typeof st.banner !== 'object') st.banner = { version: '', views: 0, dismissed: false };
+            if (!st.popup  || typeof st.popup  !== 'object') st.popup  = { version: '', views: 0 };
+            return st;
+        }
+
+        function writeAnnouncementState(state) {
+            try { localStorage.setItem(ANNOUNCEMENT_STATE_KEY, JSON.stringify(state)); } catch (_) {}
+        }
+
+        // 版本变化时重置该公告的本地状态，返回该公告的状态对象
+        function syncAnnouncementForm(form, cfg, state) {
+            const version = cfg.updated_at || '1';
+            _annVersion[form] = version;
+            if (state[form].version !== version) {
+                state[form] = { version, views: 0, dismissed: false };
+            }
+            return state[form];
+        }
+
+        // 按页面打开次数计数；每个页面会话对同一版本只计一次。返回是否允许展示
+        function countAnnouncementView(form, cfg, st) {
+            if (_annCounted[form] === _annVersion[form]) return true;
+            if (cfg.max_views > 0 && st.views >= cfg.max_views) return false;
+            st.views += 1;
+            _annCounted[form] = _annVersion[form];
+            return true;
+        }
+
+        function hideAnnouncementUI() {
+            document.getElementById('announcement').classList.remove('show');
+            document.getElementById('announcement-overlay').classList.remove('open');
+        }
+
+        // 广告位（预留）：位置见管理员设置说明
+        function renderAdSlot(data, bannerVisible, popupVisible) {
+            const slotIds = {
+                page_above:    'ad-slot-above',
+                page_below:    'ad-slot-below',
+                banner_inside: 'ad-slot-inside',
+                popup_inside:  'ad-slot-modal',
+            };
+            Object.values(slotIds).forEach(id => {
+                const el = document.getElementById(id);
+                el.innerHTML = ''; el.classList.remove('show');
+            });
+            if (!data.ad_enabled || !data.ad_html) return;
+            let pos = slotIds[data.ad_position] ? data.ad_position : 'page_below';
+            if (pos === 'banner_inside' && !bannerVisible) pos = 'page_below';   // 横幅未显示时退回横幅下方位置
+            if (pos === 'popup_inside' && !popupVisible) return;                 // 仅弹窗弹出时可见
+            const el = document.getElementById(slotIds[pos]);
+            el.innerHTML = data.ad_html;   // 已由服务端白名单净化
+            el.classList.add('show');
+        }
+
+        async function loadAnnouncement() {
+            let data;
+            try {
+                const resp = await fetch('/api/announcement', { credentials: 'include' });
+                if (!resp.ok) return;
+                data = await resp.json();
+            } catch (e) {
+                console.warn('获取公告失败', e);
+                return;
+            }
+            const state = readAnnouncementState();
+            const bannerCfg = data.banner || {};
+            const popupCfg  = data.popup  || {};
+            let showBanner = false, showPopup = false;
+
+            // 横幅公告（公告 HTML 已由服务端白名单净化）
+            const banner = document.getElementById('announcement');
+            if (bannerCfg.enabled && bannerCfg.content) {
+                const st = syncAnnouncementForm('banner', bannerCfg, state);
+                const closable = bannerCfg.dismissible !== false;
+                if (!(closable && st.dismissed) && countAnnouncementView('banner', bannerCfg, st)) {
+                    document.getElementById('announcement-body').innerHTML = bannerCfg.content;
+                    document.getElementById('announcement-close').style.display = closable ? '' : 'none';
+                    banner.classList.toggle('no-close', !closable);
+                    showBanner = true;
+                }
+            }
+            banner.classList.toggle('show', showBanner);
+
+            // 弹窗公告
+            const overlay = document.getElementById('announcement-overlay');
+            if (popupCfg.enabled && popupCfg.content) {
+                const st = syncAnnouncementForm('popup', popupCfg, state);
+                const closable = popupCfg.dismissible !== false;
+                if (_popupClosedVersion !== _annVersion.popup && countAnnouncementView('popup', popupCfg, st)) {
+                    document.getElementById('announcement-modal-body').innerHTML = popupCfg.content;
+                    document.getElementById('announcement-modal-close').style.display = closable ? '' : 'none';
+                    showPopup = true;
+                }
+            }
+            overlay.classList.toggle('open', showPopup);
+
+            writeAnnouncementState(state);
+            renderAdSlot(data, showBanner, showPopup);
+        }
+
+        // 关闭横幅：记住状态，直到该公告更新或在设置页恢复
+        function dismissBanner() {
+            document.getElementById('announcement').classList.remove('show');
+            const inside = document.getElementById('ad-slot-inside');
+            if (inside.classList.contains('show')) {
+                // 横幅内的广告位退回到横幅下方位置
+                const below = document.getElementById('ad-slot-below');
+                below.innerHTML = inside.innerHTML; below.classList.add('show');
+                inside.innerHTML = ''; inside.classList.remove('show');
+            }
+            const state = readAnnouncementState();
+            state.banner.version = _annVersion.banner;
+            state.banner.dismissed = true;
+            writeAnnouncementState(state);
+        }
+
+        // 关闭弹窗：仅本次访问有效
+        function closeAnnouncementPopup() {
+            document.getElementById('announcement-overlay').classList.remove('open');
+            _popupClosedVersion = _annVersion.popup;
+        }
+
         async function checkAuth() {
             // 如果有分享码参数，先尝试用分享码进入
             if (_shareCode) {
@@ -1577,6 +1793,7 @@ body { padding: 10px; }
             updateBackWeekBtn();
             await checkAuth();
             if (!importMode) {
+                loadAnnouncement();
                 loadCourses();
 
                 // 获取后端的刷新间隔设置，前端自动刷新间隔设为后端的一半
@@ -1594,7 +1811,7 @@ body { padding: 10px; }
 
                 // 定期自动刷新
                 setInterval(() => {
-                    if (!importMode && !adminViewMode) loadCourses();
+                    if (!importMode && !adminViewMode) { loadCourses(); loadAnnouncement(); }
                 }, refreshInterval);
             }
 

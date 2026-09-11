@@ -1,4 +1,4 @@
-const CACHE = 'kechenbiao-v17';
+const CACHE = 'kechenbiao-v20';
 const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/style.css', '/non-critical.css', '/icon.svg', '/manifest.json', '/ibm-plex-sans-sc.css'];
 const FONT_URLS = [
     '/fonts/IBMPlexSansSC-Regular.woff2',
