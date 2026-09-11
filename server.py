@@ -119,6 +119,35 @@ app.config.update(
 CORS(app, supports_credentials=True)
 
 ADMIN_USERS = [u.strip() for u in os.environ.get('ADMIN_USERS', '2405309121').split(',') if u.strip()]
+# 两级管理员：
+#   super — 超级管理员，来自环境变量 ADMIN_USERS（原有管理员自动升级），可管理普通管理员
+#   admin — 普通管理员，由超级管理员在后台添加，存于 admins 表；除管理员管理外权限与超级管理员相同
+ADMIN_ROLE_SUPER = 'super'
+ADMIN_ROLE_ADMIN = 'admin'
+_ADMIN_USERNAME_RE = re.compile(r'^[A-Za-z0-9_.@-]{1,64}$')
+
+
+def _admin_role(username):
+    """返回用户的管理员角色：'super' / 'admin' / None。每次实时计算，后台增删立即生效。"""
+    if not username:
+        return None
+    if username in ADMIN_USERS:
+        return ADMIN_ROLE_SUPER
+    with _db() as conn:
+        row = conn.execute('SELECT role FROM admins WHERE username=?', (username,)).fetchone()
+    return ADMIN_ROLE_ADMIN if row else None
+
+
+def _current_admin_role():
+    return _admin_role(session.get('username'))
+
+
+def _is_current_admin() -> bool:
+    return _current_admin_role() is not None
+
+
+def _is_current_super() -> bool:
+    return _current_admin_role() == ADMIN_ROLE_SUPER
 DB_FILE = os.environ.get('DB_FILE', 'courses.db')
 
 # ── 安全响应头 ────────────────────────────────────────────────────────────────
@@ -229,6 +258,10 @@ def init_db():
                      (token TEXT PRIMARY KEY, username TEXT NOT NULL,
                       created_at TEXT NOT NULL, revoked INTEGER DEFAULT 0)''')
         c.execute('CREATE INDEX IF NOT EXISTS idx_ics_username ON ics_tokens(username)')
+        # 普通管理员表（超级管理员来自环境变量 ADMIN_USERS，不入库）
+        c.execute('''CREATE TABLE IF NOT EXISTS admins
+                     (username TEXT PRIMARY KEY, role TEXT NOT NULL DEFAULT 'admin',
+                      created_at TEXT NOT NULL, created_by TEXT)''')
         # 用户组表
         c.execute('''CREATE TABLE IF NOT EXISTS user_groups
                      (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
@@ -523,14 +556,15 @@ def login():
     session.clear()
     session.permanent = True
     session['username'] = username
-    session['is_admin']  = username in ADMIN_USERS
+    session['is_admin']  = _admin_role(username) is not None   # 仅作参考，实际权限每次实时计算
 
     # 生成新的 CSRF token
     csrf_token = generate_csrf_token()
 
     return jsonify({
         'success':     True,
-        'is_admin':    username in ADMIN_USERS,
+        'is_admin':    _admin_role(username) is not None,
+        'admin_role':  _admin_role(username),
         'name':        user_info.get('name', username),
         'csrf_token':  csrf_token,
     })
@@ -597,7 +631,8 @@ def get_user():
         'logged_in':              True,
         'username':               username,
         'name':                   name,
-        'is_admin':               session.get('is_admin', False),
+        'is_admin':               _is_current_admin(),
+        'admin_role':             _current_admin_role(),
         'slot34_special_pattern': slot34_pattern,
     })
 
@@ -783,7 +818,7 @@ def settings():
     if 'username' not in session:
         return jsonify({'error': '未登录'}), 401
 
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
 
     if request.method == 'POST':
         # CSRF 保护
@@ -818,6 +853,7 @@ def settings():
         c.execute('SELECT key, value FROM settings')
         result = dict(c.fetchall())
     result['is_admin'] = is_admin
+    result['admin_role'] = _current_admin_role()
 
     # 附带用户最新缓存的 max_week，供前端导出使用
     username = session['username']
@@ -1035,7 +1071,7 @@ def _update_announcement_form(cur: dict, data: dict, label: str):
 @csrf_protected
 def admin_announcement():
     """管理员读取/保存公告栏完整配置（横幅、弹窗、广告位）"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     cfg = _load_announcement()
@@ -1178,7 +1214,7 @@ def share_create():
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
 
     # 检查是否有权限创建分享码
     if not _can_create_share(username, is_admin):
@@ -1233,7 +1269,7 @@ def share_list():
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
     show_all = is_admin and request.args.get('all') == '1'
     now      = datetime.now().isoformat()
 
@@ -1277,7 +1313,7 @@ def share_revoke():
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
     token    = (request.json or {}).get('token', '').strip().upper()
 
     with _db() as conn:
@@ -1297,7 +1333,7 @@ def share_revoke():
 @app.route('/api/admin/users', methods=['GET'])
 def admin_list_users():
     """管理员获取所有用户及其缓存周次"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     with _db() as conn:
@@ -1306,8 +1342,11 @@ def admin_list_users():
                      FROM users u LEFT JOIN user_groups g ON u.group_id = g.id
                      ORDER BY u.last_active DESC, u.last_login DESC''')
         users = c.fetchall()
+        c.execute('SELECT username FROM admins')
+        db_admins = {r[0] for r in c.fetchall()}
         result = []
         for u in users:
+            role = ADMIN_ROLE_SUPER if u[0] in ADMIN_USERS else (ADMIN_ROLE_ADMIN if u[0] in db_admins else None)
             c.execute('SELECT week FROM courses WHERE username=? ORDER BY week', (u[0],))
             cached_weeks = [r[0] for r in c.fetchall()]
             result.append({
@@ -1318,9 +1357,80 @@ def admin_list_users():
                 'cached_weeks': cached_weeks,
                 'group_id':     u[5],
                 'group_name':   u[6] or '',
-                'is_admin':     u[0] in ADMIN_USERS,  # 标记是否为管理员
+                'is_admin':     role is not None,
+                'admin_role':   role,
             })
     return jsonify({'users': result})
+
+
+# ── 管理员管理（仅超级管理员） ───────────────────────────────────────────────
+
+def _admin_list() -> list:
+    """所有管理员：环境变量中的超级管理员 + admins 表中的普通管理员"""
+    with _db() as conn:
+        c = conn.cursor()
+        c.execute('SELECT username, created_at, created_by FROM admins ORDER BY created_at')
+        rows = c.fetchall()
+        names = [u for u in ADMIN_USERS] + [r[0] for r in rows]
+        marks = ','.join('?' * len(names)) if names else "''"
+        c.execute(f'SELECT username, jw_name FROM users WHERE username IN ({marks})', names)
+        display = dict(c.fetchall())
+    result = [{'username': u, 'name': display.get(u) or '', 'role': ADMIN_ROLE_SUPER,
+               'source': 'env', 'created_at': '', 'created_by': ''} for u in ADMIN_USERS]
+    result += [{'username': r[0], 'name': display.get(r[0]) or '', 'role': ADMIN_ROLE_ADMIN,
+                'source': 'db', 'created_at': r[1], 'created_by': r[2] or ''} for r in rows]
+    return result
+
+
+@app.route('/api/admin/admins', methods=['GET'])
+def admin_list_admins():
+    if 'username' not in session or not _is_current_super():
+        return jsonify({'error': '仅超级管理员可用'}), 403
+    return jsonify({'success': True, 'admins': _admin_list(), 'me': session['username']})
+
+
+@app.route('/api/admin/admins', methods=['POST'])
+@csrf_protected
+def admin_add_admin():
+    """添加普通管理员"""
+    if 'username' not in session or not _is_current_super():
+        return jsonify({'success': False, 'message': '仅超级管理员可用'}), 403
+    data = request.json or {}
+    username = sanitize_string(str(data.get('username', '')), 64).strip()
+    if not _ADMIN_USERNAME_RE.match(username):
+        return jsonify({'success': False, 'message': '用户名格式无效'}), 400
+    if username in ADMIN_USERS:
+        return jsonify({'success': False, 'message': '该用户已是超级管理员'}), 400
+    with _db() as conn:
+        cur = conn.execute(
+            'INSERT OR IGNORE INTO admins (username, role, created_at, created_by) VALUES (?, ?, ?, ?)',
+            (username, ADMIN_ROLE_ADMIN, datetime.now().isoformat(), session['username']))
+        conn.commit()
+        added = cur.rowcount > 0
+    if not added:
+        return jsonify({'success': False, 'message': '该用户已是管理员'}), 400
+    logger.info('超级管理员 %s 添加普通管理员 %s', session['username'], username)
+    return jsonify({'success': True, 'admins': _admin_list(), 'me': session['username']})
+
+
+@app.route('/api/admin/admins/remove', methods=['POST'])
+@csrf_protected
+def admin_remove_admin():
+    """移除普通管理员"""
+    if 'username' not in session or not _is_current_super():
+        return jsonify({'success': False, 'message': '仅超级管理员可用'}), 403
+    data = request.json or {}
+    username = sanitize_string(str(data.get('username', '')), 64).strip()
+    if username in ADMIN_USERS:
+        return jsonify({'success': False, 'message': '超级管理员由环境变量 ADMIN_USERS 配置，不能在此移除'}), 400
+    with _db() as conn:
+        cur = conn.execute('DELETE FROM admins WHERE username=?', (username,))
+        conn.commit()
+        removed = cur.rowcount > 0
+    if not removed:
+        return jsonify({'success': False, 'message': '该用户不是普通管理员'}), 404
+    logger.info('超级管理员 %s 移除普通管理员 %s', session['username'], username)
+    return jsonify({'success': True, 'admins': _admin_list(), 'me': session['username']})
 
 
 # ── 用户组管理 ────────────────────────────────────────────────────────────────
@@ -1328,7 +1438,7 @@ def admin_list_users():
 @app.route('/api/admin/groups', methods=['GET'])
 def admin_list_groups():
     """获取所有用户组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     with _db() as conn:
@@ -1348,7 +1458,7 @@ def admin_list_groups():
 @csrf_protected
 def admin_create_group():
     """创建用户组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     data = request.get_json() or {}
@@ -1376,7 +1486,7 @@ def admin_create_group():
 @csrf_protected
 def admin_update_group(group_id):
     """修改用户组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     data = request.get_json() or {}
@@ -1413,7 +1523,7 @@ def admin_update_group(group_id):
 @csrf_protected
 def admin_delete_group(group_id):
     """删除用户组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     # 不允许删除默认组（ID 1或2）
@@ -1436,7 +1546,7 @@ def admin_delete_group(group_id):
 @csrf_protected
 def admin_set_user_group(username):
     """设置用户所属组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     data = request.get_json() or {}
@@ -1460,7 +1570,7 @@ def admin_set_user_group(username):
 @csrf_protected
 def admin_default_group():
     """获取或设置默认用户组"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     if request.method == 'GET':
@@ -1487,7 +1597,7 @@ def admin_default_group():
 @app.route('/api/admin/view/<string:target_user>/<int:week>', methods=['GET'])
 def admin_view(target_user, week):
     """管理员查看指定用户的缓存课表（不触发实时抓取）"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     with _db() as conn:
@@ -1506,7 +1616,7 @@ def admin_view(target_user, week):
 @csrf_protected
 def admin_force_fetch():
     """管理员触发立即为所有用户抓取课表（后台执行，失败保留缓存）"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     def _run():
@@ -1554,7 +1664,7 @@ def admin_force_fetch():
 @csrf_protected
 def admin_restart():
     """管理员重启服务"""
-    if 'username' not in session or not session.get('is_admin'):
+    if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
     # 检测运行环境
@@ -1950,7 +2060,7 @@ def ics_create():
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
 
     if not _can_use_ics(username, is_admin):
         return jsonify({'error': '管理员未开放日历订阅功能'}), 403
@@ -2056,7 +2166,7 @@ def ics_status():
         return jsonify({'error': '未登录'}), 401
 
     username = session['username']
-    is_admin = session.get('is_admin', False)
+    is_admin = _is_current_admin()
 
     with _db() as conn:
         c = conn.cursor()

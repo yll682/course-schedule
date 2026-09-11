@@ -1793,7 +1793,8 @@ body { padding: 10px; }
             updateBackWeekBtn();
             await checkAuth();
             if (!importMode) {
-                loadAnnouncement();
+                // 管理员查看他人课表时不显示公告与广告位
+                if (!adminViewMode) loadAnnouncement();
                 loadCourses();
 
                 // 获取后端的刷新间隔设置，前端自动刷新间隔设为后端的一半

@@ -78,7 +78,8 @@
         .field { margin-bottom: 14px; }
         .field:last-child { margin-bottom: 0; }
         .field label { display: block; font-size: 0.82rem; font-weight: 500; margin-bottom: 5px; color: var(--c-text); }
-        .field .hint { font-size: 0.75rem; color: var(--c-muted); margin-top: 5px; line-height: 1.5; }
+        .hint { font-size: 0.75rem; color: var(--c-muted); line-height: 1.5; }
+        .field .hint { margin-top: 5px; }
         .field input, .field select {
             width: 100%; padding: 8px 11px;
             border: 1px solid var(--c-border-input); border-radius: 8px;
@@ -404,6 +405,42 @@
             flex-wrap: wrap; justify-content: space-between;
         }
         .admin-btn-group-left { display: flex; align-items: center; gap: 8px; }
+
+        /* ── 页签（仅管理员） ── */
+        .tabs { display: none; gap: 6px; margin-bottom: 14px; }
+        body.is-admin .tabs { display: flex; }
+        .admin-only { display: none; }
+        body.is-admin .admin-only { display: block; }
+        .super-only { display: none; }
+        body.is-super .super-only { display: block; }
+        body.is-admin.tab-user  [data-tab="admin"] { display: none !important; }
+        body.is-admin.tab-admin [data-tab="user"]  { display: none !important; }
+
+        /* ── 操作行列表（账户） ── */
+        .action-list { border: 1px solid var(--c-border-soft); border-radius: 8px; overflow: hidden; }
+        .action-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 12px; border-top: 1px solid var(--c-border-soft);
+        }
+        .action-row:first-child { border-top: none; }
+        .action-row-text { flex: 1; min-width: 0; }
+        .action-row-title { font-size: 0.86rem; }
+        .action-row-desc { font-size: 0.75rem; color: var(--c-muted); margin-top: 2px; line-height: 1.4; }
+        .action-row-status { font-size: 0.75rem; color: #52c41a; margin-top: 4px; display: none; word-break: break-all; }
+        .action-row .btn { flex-shrink: 0; }
+
+        /* ── 折叠段（公告栏） ── */
+        .acc { margin-bottom: 8px; }
+        .acc:last-child { margin-bottom: 0; }
+        .acc .advanced-toggle-title { display: flex; align-items: center; gap: 8px; }
+        .badge-on  { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+        .badge-off { background: var(--c-subtle); color: var(--c-muted); border: 1px solid var(--c-border-soft); }
+        @media (prefers-color-scheme: dark) {
+            .badge-on { background: #162312; color: #6abe39; border-color: #274916; }
+        }
+        .toggle-list { border: 1px solid var(--c-border-soft); border-radius: 8px; overflow: hidden; }
+        .check-line-align { margin-top: 26px; }
+        @media (max-width: 480px) { .check-line-align { margin-top: 0; } }
     </style>
 </head>
 <body>
@@ -416,102 +453,136 @@
             <span class="user-label" id="user-info"></span>
         </div>
 
-        <!-- ── 账户（所有用户）── -->
-        <div class="card">
+        <!-- ── 页签（仅管理员可见） ── -->
+        <div class="tabs chip-group">
+            <button class="chip" id="tab-user" onclick="selectTab('user')">我的设置</button>
+            <button class="chip" id="tab-admin" onclick="selectTab('admin')">管理后台</button>
+        </div>
+
+        <!-- ══════════ 我的设置 ══════════ -->
+
+        <!-- 账户 -->
+        <div class="card" data-tab="user">
             <div class="card-header">
                 <h2>账户</h2>
                 <span class="badge badge-user">所有用户</span>
             </div>
             <div class="card-body">
-                <div class="btn-group">
-                    <button class="btn btn-default" id="export-btn" onclick="exportSemester()">导出课表</button>
-                    <button class="btn btn-default" onclick="copyWeekNumberUrl()">复制周次查询接口URL</button>
-                    <button class="btn btn-default" onclick="clearLocalCache()">清空缓存（出现问题点这）</button>
-                </div>
-                <div class="btn-group" style="margin-top:8px">
-                    <button class="btn btn-danger" onclick="doLogout()">退出登录</button>
-                    <button class="btn btn-default" id="install-btn" onclick="installPWA()">放到桌面（使用 Chrome）</button>
-                </div>
-                <div id="export-status" style="font-size:0.8rem;color:var(--c-muted);margin-top:8px;display:none"></div>
-                <div id="cache-clear-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
-                <div id="week-number-url-status" style="font-size:0.8rem;color:#52c41a;margin-top:8px;display:none"></div>
-
-                <div class="divider" style="margin-top:14px"></div>
-
-                <button class="advanced-toggle" type="button" onclick="toggleAdvancedOptions()" aria-expanded="false" id="advanced-toggle">
-                    <span class="advanced-toggle-title">高级选项</span>
-                    <span class="advanced-toggle-icon" id="advanced-toggle-icon">▾</span>
-                </button>
-                <div class="advanced-panel" id="advanced-panel">
-                    <!-- 按钮模式 -->
-                    <div class="section-label" style="margin-bottom:8px">首页左上角按钮</div>
-                    <div class="chip-group" style="margin-bottom:16px">
-                        <button class="chip" id="chip-back" onclick="selectButtonMode('back_to_week')">回本周</button>
-                        <button class="chip" id="chip-capture" onclick="selectButtonMode('capture')">截图</button>
-                    </div>
-                    <input type="hidden" id="home-button-mode" value="back_to_week">
-
-                    <!-- 显示设置 -->
-                    <div class="section-label" style="margin-bottom:0">课程卡片显示</div>
-                    <div style="border:1px solid var(--c-border-soft);border-radius:8px;overflow:hidden;margin-top:8px;margin-bottom:14px">
-                        <label class="toggle-row">
-                            <span class="toggle-row-label">显示上课时间</span>
-                            <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked>
-                            <span class="toggle-switch"></span>
-                        </label>
-                        <label class="toggle-row">
-                            <span class="toggle-row-label">显示上课地点</span>
-                            <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked>
-                            <span class="toggle-switch"></span>
-                        </label>
-                        <label class="toggle-row">
-                            <span class="toggle-row-label">显示 Emoji 图标</span>
-                            <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked>
-                            <span class="toggle-switch"></span>
-                        </label>
-                        <label class="toggle-row">
-                            <span class="toggle-row-label">彩色课程</span>
-                            <input type="checkbox" id="colorful-courses" onchange="saveAdvancedOptions()">
-                            <span class="toggle-switch"></span>
-                        </label>
-                    </div>
-
-                    <!-- 主题色 -->
-                    <div class="section-label" style="margin-bottom:8px">主题色</div>
-                    <div id="theme-colors" class="theme-grid" style="margin-bottom:10px"></div>
-
-                    <div class="save-status" id="advanced-save-status">✓ 已保存</div>
-
-                    <!-- 日历订阅 -->
-                    <div id="ics-section" style="display:none">
-                        <div class="divider"></div>
-                        <div class="section-label" style="margin-bottom:8px">日历订阅</div>
-                        <div id="ics-disabled-hint" style="font-size:0.82rem;color:#999;display:none">管理员尚未开放日历订阅功能。</div>
-                        <div id="ics-content">
-                            <div id="ics-no-subscription">
-                                <button class="btn btn-primary btn-sm" onclick="createIcsSubscription()">生成订阅链接</button>
-                                <div class="field hint" style="margin-top:8px">
-                                    生成后可导入到 Google 日历、Apple 日历、Outlook 等应用，自动同步课表。
-                                </div>
-                            </div>
-                            <div id="ics-has-subscription" style="display:none">
-                                <div class="ics-url-row">
-                                    <input type="text" id="ics-url" readonly class="ics-url-input">
-                                    <div class="ics-url-btns">
-                                        <button class="btn btn-default btn-sm" onclick="copyIcsUrl()">复制链接</button>
-                                        <button class="btn btn-danger btn-sm" onclick="revokeIcsSubscription()">撤销</button>
-                                    </div>
-                                </div>
-                                <div class="field hint">订阅创建时间：<span id="ics-created-at"></span></div>
-                            </div>
+                <div class="action-list">
+                    <div class="action-row">
+                        <div class="action-row-text">
+                            <div class="action-row-title">导出课表</div>
+                            <div class="action-row-desc">导出本学期全部周次为 JSON 文件</div>
+                            <div class="action-row-status" id="export-status" style="color:var(--c-muted)"></div>
                         </div>
+                        <button class="btn btn-default btn-sm" id="export-btn" onclick="exportSemester()">导出</button>
+                    </div>
+                    <div class="action-row">
+                        <div class="action-row-text">
+                            <div class="action-row-title">周次查询接口</div>
+                            <div class="action-row-desc">供第三方脚本查询当前周次</div>
+                            <div class="action-row-status" id="week-number-url-status"></div>
+                        </div>
+                        <button class="btn btn-default btn-sm" onclick="copyWeekNumberUrl()">复制 URL</button>
+                    </div>
+                    <div class="action-row" id="install-btn">
+                        <div class="action-row-text">
+                            <div class="action-row-title">放到桌面</div>
+                            <div class="action-row-desc">安装为应用，需使用 Chrome / Edge</div>
+                        </div>
+                        <button class="btn btn-default btn-sm" onclick="installPWA()">安装</button>
+                    </div>
+                    <div class="action-row">
+                        <div class="action-row-text">
+                            <div class="action-row-title">清空缓存</div>
+                            <div class="action-row-desc">课表显示异常时使用，不会退出登录</div>
+                            <div class="action-row-status" id="cache-clear-status"></div>
+                        </div>
+                        <button class="btn btn-default btn-sm" onclick="clearLocalCache()">清空</button>
+                    </div>
+                    <div class="action-row">
+                        <div class="action-row-text">
+                            <div class="action-row-title">退出登录</div>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="doLogout()">退出</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- ── 分享码（所有用户）── -->
-        <div class="card" id="notice-card">
+        <!-- 显示偏好 -->
+        <div class="card" data-tab="user">
+            <div class="card-header">
+                <h2>显示偏好</h2>
+                <span class="save-status" id="advanced-save-status">✓ 已保存</span>
+                <span class="badge badge-user">仅本设备</span>
+            </div>
+            <div class="card-body">
+                <div class="section-label" style="margin-bottom:8px">首页左上角按钮</div>
+                <div class="chip-group" style="margin-bottom:16px">
+                    <button class="chip" id="chip-back" onclick="selectButtonMode('back_to_week')">回本周</button>
+                    <button class="chip" id="chip-capture" onclick="selectButtonMode('capture')">截图</button>
+                </div>
+                <input type="hidden" id="home-button-mode" value="back_to_week">
+
+                <div class="section-label" style="margin-bottom:8px">课程卡片</div>
+                <div class="toggle-list" style="margin-bottom:16px">
+                    <label class="toggle-row">
+                        <span class="toggle-row-label">显示上课时间</span>
+                        <input type="checkbox" id="show-course-time" onchange="saveAdvancedOptions()" checked>
+                        <span class="toggle-switch"></span>
+                    </label>
+                    <label class="toggle-row">
+                        <span class="toggle-row-label">显示上课地点</span>
+                        <input type="checkbox" id="show-course-location" onchange="saveAdvancedOptions()" checked>
+                        <span class="toggle-switch"></span>
+                    </label>
+                    <label class="toggle-row">
+                        <span class="toggle-row-label">显示 Emoji 图标</span>
+                        <input type="checkbox" id="show-emoji" onchange="saveAdvancedOptions()" checked>
+                        <span class="toggle-switch"></span>
+                    </label>
+                    <label class="toggle-row">
+                        <span class="toggle-row-label">彩色课程</span>
+                        <input type="checkbox" id="colorful-courses" onchange="saveAdvancedOptions()">
+                        <span class="toggle-switch"></span>
+                    </label>
+                </div>
+
+                <div class="section-label" style="margin-bottom:8px">主题色</div>
+                <div id="theme-colors" class="theme-grid"></div>
+            </div>
+        </div>
+
+        <!-- 日历订阅（管理员未开放时整卡隐藏） -->
+        <div class="card" data-tab="user" id="ics-section" style="display:none">
+            <div class="card-header">
+                <h2>日历订阅</h2>
+                <span class="badge badge-user">所有用户</span>
+            </div>
+            <div class="card-body">
+                <div id="ics-disabled-hint" class="empty-hint" style="display:none">管理员尚未开放日历订阅功能。</div>
+                <div id="ics-content">
+                    <div id="ics-no-subscription">
+                        <div class="hint" style="margin-bottom:10px">生成后可导入 Google 日历、Apple 日历、Outlook 等应用，自动同步课表。</div>
+                        <button class="btn btn-primary btn-sm" onclick="createIcsSubscription()">生成订阅链接</button>
+                    </div>
+                    <div id="ics-has-subscription" style="display:none">
+                        <div class="ics-url-row">
+                            <input type="text" id="ics-url" readonly class="ics-url-input">
+                            <div class="ics-url-btns">
+                                <button class="btn btn-default btn-sm" onclick="copyIcsUrl()">复制链接</button>
+                                <button class="btn btn-danger btn-sm" onclick="revokeIcsSubscription()">撤销</button>
+                            </div>
+                        </div>
+                        <div class="hint">创建于 <span id="ics-created-at"></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 公告（查看 / 恢复） -->
+        <div class="card" data-tab="user" id="notice-card">
             <div class="card-header">
                 <h2>公告</h2>
                 <span class="badge badge-user">所有用户</span>
@@ -532,13 +603,13 @@
             </div>
         </div>
 
-        <div class="card">
+        <!-- 分享码 -->
+        <div class="card" data-tab="user">
             <div class="card-header">
                 <h2>分享码</h2>
                 <span class="badge badge-user">所有用户</span>
             </div>
             <div class="card-body">
-                <!-- 创建 -->
                 <div class="share-create-form">
                     <div class="share-create-fields">
                         <div class="field" style="margin:0;flex:2;min-width:90px">
@@ -562,7 +633,6 @@
                     <button class="btn btn-primary share-create-btn" onclick="createShare()">生成</button>
                 </div>
 
-                <!-- 生成结果 -->
                 <div id="share-result" style="display:none;margin-top:12px">
                     <div class="result-card">
                         <div class="result-card-title">✓ 分享码已生成</div>
@@ -577,202 +647,229 @@
                     </div>
                 </div>
 
-                <!-- 我的分享码列表 -->
                 <div class="section-label" style="margin-top:16px" id="share-list-label">我的分享码</div>
                 <div id="share-list">加载中...</div>
             </div>
         </div>
 
-        <!-- ── 后台抓取（管理员）── -->
-        <div class="card" id="admin-card" style="display:none">
+        <!-- ══════════ 管理后台 ══════════ -->
+
+        <!-- 后台抓取 -->
+        <div class="card admin-only" data-tab="admin" id="admin-card">
             <div class="card-header">
                 <h2>后台抓取</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
             <div class="card-body">
-                <div class="field">
-                    <label>自动抓取间隔（分钟）</label>
-                    <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
-                    <div class="hint">后台定时为所有用户抓取上周、当周、下周课表。建议 30–120 分钟。</div>
+                <div class="field-row">
+                    <div class="field">
+                        <label>自动抓取间隔（分钟）</label>
+                        <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
+                        <div class="hint">定时为所有用户抓取上周、当周、下周课表。建议 30–120。</div>
+                    </div>
+                    <div class="field">
+                        <label>第 3、4 节特殊时间教学楼</label>
+                        <input type="text" id="slot34_special_pattern" placeholder="如：教2,实2" disabled>
+                        <div class="hint">地点含任一标识时，第 3 节改为 10:15–11:00，第 4 节改为 11:05–11:50。多个用英文逗号分隔，留空不启用。</div>
+                    </div>
                 </div>
-                <div class="field">
-                    <label>第3、4节特殊时间教学楼标识</label>
-                    <input type="text" id="slot34_special_pattern" placeholder="如：教2" disabled>
-                    <div class="hint">地点含任一标识时，第3节改为 10:15–11:00，第4节改为 11:05–11:50。多标识用英文逗号分隔，如 <code>教2,实2</code>。留空不启用。</div>
-                </div>
-                <div class="admin-btn-group" style="margin-top:4px">
+                <div class="admin-btn-group" style="margin-top:14px">
                     <div class="admin-btn-group-left">
                         <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
                         <span class="save-status" id="admin-save-status">✓ 已保存</span>
                     </div>
                     <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled>立即抓取所有用户</button>
                 </div>
+            </div>
+        </div>
 
-                <!-- 公告栏 -->
-                <div class="divider"></div>
-                <div class="section-label" style="margin-bottom:6px">公告栏</div>
-                <div class="hint">横幅与弹窗是两套独立公告，可分别编辑、分别启用，也可同时启用。均显示给所有用户（含分享浏览模式）。支持加粗、颜色、链接、图片、列表等，允许部分 HTML 标签（p/div/span/a/img/ul/ol/h1-h4/blockquote/code 等），脚本、iframe、事件属性会在保存时被服务端过滤。</div>
-                <div class="section-label" style="margin:14px 0 10px">顶部横幅公告</div>
-                <div class="field">
-                    <label class="check-line">
-                        <input type="checkbox" id="ann-banner-enabled" disabled>
-                        <span>启用顶部横幅公告</span>
-                    </label>
-                    <div class="hint">常驻在课表页顶部、课表上方。</div>
-                </div>
-                <div class="field-row">
-                    <div class="field">
-                        <label>展示次数（每位用户）</label>
-                        <input type="number" id="ann-banner-max-views" value="0" min="0" max="999" disabled>
-                        <div class="hint">按课表页打开次数统计。0 = 每次打开都显示；N = 最多显示 N 次，本公告更新后重新计数。</div>
-                    </div>
-                    <div class="field">
-                        <label class="check-line" style="margin-top:26px">
-                            <input type="checkbox" id="ann-banner-dismissible" checked disabled>
-                            <span>允许用户关闭</span>
-                        </label>
-                        <div class="hint">横幅的 ✕ 会记住关闭状态，直到本公告更新或用户在设置页「公告」中恢复。</div>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>顶部横幅公告内容</label>
-                    <div class="rte disabled" id="ann-banner-rte">
-                        <div class="rte-toolbar">
-                            <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
-                            <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
-                            <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
-                            <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
-                            <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
-                            <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
-                            <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
-                            <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
-                            <span class="sep"></span>
-                            <label title="文字颜色">A<input type="color" id="ann-banner-color" value="#d4380d"></label>
-                            <button type="button" data-cmd="link" title="插入链接">🔗</button>
-                            <button type="button" data-cmd="image" title="插入图片">🖼</button>
-                            <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
-                            <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="source" id="ann-banner-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+        <!-- 公告栏 -->
+        <div class="card admin-only" data-tab="admin">
+            <div class="card-header">
+                <h2>公告栏</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div class="card-body">
+                <div class="hint" style="margin-bottom:12px">横幅与弹窗是两套独立公告，可分别编辑、分别启用。内容支持富文本与部分 HTML，脚本、iframe、事件属性会在保存时被服务端过滤。</div>
+                <div class="acc" id="acc-banner">
+                    <button class="advanced-toggle" type="button" onclick="toggleAcc('banner')" aria-expanded="false" id="acc-banner-toggle">
+                        <span class="advanced-toggle-title">顶部横幅公告<span class="badge badge-off" id="ann-banner-status">未启用</span></span>
+                        <span class="advanced-toggle-icon">▾</span>
+                    </button>
+                    <div class="advanced-panel" id="acc-banner-panel">
+                        <div class="field">
+                            <label class="check-line">
+                                <input type="checkbox" id="ann-banner-enabled" disabled onchange="updateAnnStatus('banner')">
+                                <span>启用顶部横幅公告</span>
+                            </label>
+                            <div class="hint">常驻在课表页顶部、课表上方。</div>
                         </div>
-                        <div class="rte-editor" id="ann-banner-editor" contenteditable="true" data-placeholder="输入顶部横幅公告内容，支持富文本…"></div>
-                        <textarea class="rte-source" id="ann-banner-source" spellcheck="false" placeholder="HTML 源码"></textarea>
-                    </div>
-                    <div class="counter"><span id="ann-banner-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-banner-btn" onclick="clearAnnouncement('banner')" disabled style="margin-left:8px">清空内容</button></div>
-                </div>
-                <div class="section-label" style="margin:14px 0 10px">弹窗公告</div>
-                <div class="field">
-                    <label class="check-line">
-                        <input type="checkbox" id="ann-popup-enabled" disabled>
-                        <span>启用弹窗公告</span>
-                    </label>
-                    <div class="hint">打开课表页时以弹窗形式弹出。</div>
-                </div>
-                <div class="field-row">
-                    <div class="field">
-                        <label>展示次数（每位用户）</label>
-                        <input type="number" id="ann-popup-max-views" value="0" min="0" max="999" disabled>
-                        <div class="hint">按课表页打开次数统计。0 = 每次打开都显示；N = 最多显示 N 次，本公告更新后重新计数。</div>
-                    </div>
-                    <div class="field">
-                        <label class="check-line" style="margin-top:26px">
-                            <input type="checkbox" id="ann-popup-dismissible" checked disabled>
-                            <span>允许用户关闭</span>
-                        </label>
-                        <div class="hint">弹窗的关闭仅对本次访问有效，下次打开课表页仍会弹出（受展示次数限制）。关闭后用户仍可在设置页「公告」中查看。</div>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>弹窗公告内容</label>
-                    <div class="rte disabled" id="ann-popup-rte">
-                        <div class="rte-toolbar">
-                            <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
-                            <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
-                            <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
-                            <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
-                            <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
-                            <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
-                            <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
-                            <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
-                            <span class="sep"></span>
-                            <label title="文字颜色">A<input type="color" id="ann-popup-color" value="#d4380d"></label>
-                            <button type="button" data-cmd="link" title="插入链接">🔗</button>
-                            <button type="button" data-cmd="image" title="插入图片">🖼</button>
-                            <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
-                            <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="source" id="ann-popup-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+                        <div class="field-row">
+                            <div class="field">
+                                <label>展示次数（每位用户）</label>
+                                <input type="number" id="ann-banner-max-views" value="0" min="0" max="999" disabled>
+                                <div class="hint">按课表页打开次数统计。0 = 每次都显示；本公告更新后重新计数。</div>
+                            </div>
+                            <div class="field">
+                                <label class="check-line check-line-align">
+                                    <input type="checkbox" id="ann-banner-dismissible" checked disabled>
+                                    <span>允许用户关闭</span>
+                                </label>
+                                <div class="hint">关闭后会记住，直到本公告更新或用户在设置页恢复。</div>
+                            </div>
                         </div>
-                        <div class="rte-editor" id="ann-popup-editor" contenteditable="true" data-placeholder="输入弹窗公告内容，支持富文本…"></div>
-                        <textarea class="rte-source" id="ann-popup-source" spellcheck="false" placeholder="HTML 源码"></textarea>
+                        <div class="field">
+                            <label>内容</label>
+                            <div class="rte disabled" id="ann-banner-rte">
+                                <div class="rte-toolbar">
+                                    <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
+                                    <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
+                                    <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
+                                    <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
+                                    <span class="sep"></span>
+                                    <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
+                                    <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
+                                    <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
+                                    <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
+                                    <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
+                                    <span class="sep"></span>
+                                    <label title="文字颜色">A<input type="color" id="ann-banner-color" value="#d4380d"></label>
+                                    <button type="button" data-cmd="link" title="插入链接">🔗</button>
+                                    <button type="button" data-cmd="image" title="插入图片">🖼</button>
+                                    <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
+                                    <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
+                                    <span class="sep"></span>
+                                    <button type="button" data-cmd="source" id="ann-banner-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+                                </div>
+                                <div class="rte-editor" id="ann-banner-editor" contenteditable="true" data-placeholder="输入顶部横幅公告内容，支持富文本…"></div>
+                                <textarea class="rte-source" id="ann-banner-source" spellcheck="false" placeholder="HTML 源码"></textarea>
+                            </div>
+                            <div class="counter"><span id="ann-banner-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-banner-btn" onclick="clearAnnouncement('banner')" disabled style="margin-left:8px">清空内容</button></div>
+                        </div>
                     </div>
-                    <div class="counter"><span id="ann-popup-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-popup-btn" onclick="clearAnnouncement('popup')" disabled style="margin-left:8px">清空内容</button></div>
+                </div>
+                <div class="acc" id="acc-popup">
+                    <button class="advanced-toggle" type="button" onclick="toggleAcc('popup')" aria-expanded="false" id="acc-popup-toggle">
+                        <span class="advanced-toggle-title">弹窗公告<span class="badge badge-off" id="ann-popup-status">未启用</span></span>
+                        <span class="advanced-toggle-icon">▾</span>
+                    </button>
+                    <div class="advanced-panel" id="acc-popup-panel">
+                        <div class="field">
+                            <label class="check-line">
+                                <input type="checkbox" id="ann-popup-enabled" disabled onchange="updateAnnStatus('popup')">
+                                <span>启用弹窗公告</span>
+                            </label>
+                            <div class="hint">打开课表页时以弹窗形式弹出。</div>
+                        </div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label>展示次数（每位用户）</label>
+                                <input type="number" id="ann-popup-max-views" value="0" min="0" max="999" disabled>
+                                <div class="hint">按课表页打开次数统计。0 = 每次都显示；本公告更新后重新计数。</div>
+                            </div>
+                            <div class="field">
+                                <label class="check-line check-line-align">
+                                    <input type="checkbox" id="ann-popup-dismissible" checked disabled>
+                                    <span>允许用户关闭</span>
+                                </label>
+                                <div class="hint">关闭仅对本次访问有效，下次打开仍会弹出。</div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label>内容</label>
+                            <div class="rte disabled" id="ann-popup-rte">
+                                <div class="rte-toolbar">
+                                    <button type="button" data-cmd="bold" title="加粗"><b>B</b></button>
+                                    <button type="button" data-cmd="italic" title="斜体"><i>I</i></button>
+                                    <button type="button" data-cmd="underline" title="下划线"><u>U</u></button>
+                                    <button type="button" data-cmd="strikeThrough" title="删除线"><s>S</s></button>
+                                    <span class="sep"></span>
+                                    <button type="button" data-cmd="formatBlock" data-val="h3" title="标题">H</button>
+                                    <button type="button" data-cmd="formatBlock" data-val="p" title="正文">¶</button>
+                                    <button type="button" data-cmd="insertUnorderedList" title="无序列表">•≡</button>
+                                    <button type="button" data-cmd="insertOrderedList" title="有序列表">1≡</button>
+                                    <button type="button" data-cmd="formatBlock" data-val="blockquote" title="引用">❝</button>
+                                    <span class="sep"></span>
+                                    <label title="文字颜色">A<input type="color" id="ann-popup-color" value="#d4380d"></label>
+                                    <button type="button" data-cmd="link" title="插入链接">🔗</button>
+                                    <button type="button" data-cmd="image" title="插入图片">🖼</button>
+                                    <button type="button" data-cmd="insertHorizontalRule" title="分隔线">—</button>
+                                    <button type="button" data-cmd="removeFormat" title="清除格式">✕fmt</button>
+                                    <span class="sep"></span>
+                                    <button type="button" data-cmd="source" id="ann-popup-source-btn" title="编辑 HTML 源码">&lt;/&gt;</button>
+                                </div>
+                                <div class="rte-editor" id="ann-popup-editor" contenteditable="true" data-placeholder="输入弹窗公告内容，支持富文本…"></div>
+                                <textarea class="rte-source" id="ann-popup-source" spellcheck="false" placeholder="HTML 源码"></textarea>
+                            </div>
+                            <div class="counter"><span id="ann-popup-count">0</span>/10000 <button class="btn btn-default btn-sm" id="clear-popup-btn" onclick="clearAnnouncement('popup')" disabled style="margin-left:8px">清空内容</button></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="acc" id="acc-ad">
+                    <button class="advanced-toggle" type="button" onclick="toggleAcc('ad')" aria-expanded="false" id="acc-ad-toggle">
+                        <span class="advanced-toggle-title">广告位（预留）<span class="badge badge-off" id="ann-ad-status">未启用</span></span>
+                        <span class="advanced-toggle-icon">▾</span>
+                    </button>
+                    <div class="advanced-panel" id="acc-ad-panel">
+                        <div class="field">
+                            <label class="check-line">
+                                <input type="checkbox" id="ann-ad-enabled" disabled onchange="updateAnnStatus('ad')">
+                                <span>启用广告位</span>
+                            </label>
+                            <div class="hint">当前仅为占位。填入 HTML 片段后按所选位置展示，与两套公告是否启用无关。</div>
+                        </div>
+                        <div class="field">
+                            <label>位置</label>
+                            <select id="ann-ad-position" disabled>
+                                <option value="page_below">课表页 · 横幅公告下方（无横幅时在课表上方）</option>
+                                <option value="page_above">课表页 · 横幅公告上方</option>
+                                <option value="banner_inside">横幅公告内部 · 正文下方</option>
+                                <option value="popup_inside">弹窗公告内部 · 正文下方</option>
+                            </select>
+                            <div class="hint">「横幅内部」在横幅未显示时退回到横幅下方；「弹窗内部」仅在弹窗弹出时可见。</div>
+                        </div>
+                        <div class="field">
+                            <label>HTML</label>
+                            <textarea id="ann-ad-html" maxlength="5000" placeholder='例如：&lt;div class="ad-slot"&gt;广告位招租&lt;/div&gt;' disabled oninput="updateAdPreview()"></textarea>
+                            <div class="counter"><span id="ann-ad-count">0</span>/5000</div>
+                            <div class="ad-preview" id="ann-ad-preview"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="section-label" style="margin:14px 0 10px">广告位（预留）</div>
-                <div class="field">
-                    <label class="check-line">
-                        <input type="checkbox" id="ann-ad-enabled" disabled>
-                        <span>启用广告位</span>
-                    </label>
-                    <div class="hint">当前仅为占位，无实际投放逻辑。填入 HTML 片段后即按位置展示，可用于后续接入广告代码（同样受服务端白名单过滤）。与两套公告是否启用无关。</div>
-                </div>
-                <div class="field-row">
-                    <div class="field">
-                        <label>广告位位置</label>
-                        <select id="ann-ad-position" disabled>
-                            <option value="page_below">课表页 · 横幅公告下方（无横幅时在课表上方）</option>
-                            <option value="page_above">课表页 · 横幅公告上方</option>
-                            <option value="banner_inside">横幅公告内部 · 正文下方</option>
-                            <option value="popup_inside">弹窗公告内部 · 正文下方</option>
-                        </select>
-                        <div class="hint">「横幅内部」在横幅未显示时退回到横幅下方位置；「弹窗内部」仅在弹窗弹出时可见。前两项始终显示在课表页。</div>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>广告位 HTML</label>
-                    <textarea id="ann-ad-html" maxlength="5000" placeholder='例如：&lt;div class="ad-slot"&gt;广告位招租&lt;/div&gt;' disabled oninput="updateAdPreview()"></textarea>
-                    <div class="counter"><span id="ann-ad-count">0</span>/5000</div>
-                    <div class="ad-preview" id="ann-ad-preview"></div>
-                </div>
-                <div class="admin-btn-group" style="margin-top:4px">
+                <div class="admin-btn-group" style="margin-top:14px">
                     <div class="admin-btn-group-left">
                         <button class="btn btn-primary" id="save-announcement-btn" onclick="saveAnnouncement()" disabled>保存公告设置</button>
                         <span class="save-status" id="announcement-save-status">✓ 已保存</span>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- 服务管理 -->
-                <div class="divider"></div>
-                <div class="section-label" style="margin-bottom:10px">服务管理</div>
-                <button class="btn btn-danger" id="restart-btn" onclick="restartService()" disabled>重启服务</button>
-                <div class="hint" style="margin-top:6px">重启服务会中断所有用户会话，请谨慎操作</div>
-
-                <!-- 分享码管理 -->
-                <div class="divider"></div>
-                <div class="section-label" style="margin-bottom:10px">分享码管理</div>
+        <!-- 分享码管理 -->
+        <div class="card admin-only" data-tab="admin">
+            <div class="card-header">
+                <h2>分享码管理</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div class="card-body">
                 <div id="admin-share-list">加载中...</div>
             </div>
         </div>
 
-        <!-- ── 用户组管理（管理员）── -->
-        <div class="card" id="groups-card" style="display:none">
+        <!-- 用户组管理 -->
+        <div class="card admin-only" data-tab="admin" id="groups-card">
             <div class="card-header">
                 <h2>用户组管理</h2>
                 <span class="badge badge-admin">管理员</span>
             </div>
             <div class="card-body">
-                <div class="hint" style="margin-bottom:14px">将用户分组并授予不同权限。未分组用户使用默认组权限。</div>
                 <div class="field">
                     <label>新用户默认组</label>
                     <select id="default-group-select" onchange="saveDefaultGroup()" disabled>
                         <option value="">加载中...</option>
                     </select>
-                    <div class="hint">新注册用户将自动加入此组。</div>
+                    <div class="hint">新注册用户自动加入此组；未分组用户使用默认组权限。</div>
                 </div>
 
                 <div class="divider"></div>
@@ -784,8 +881,8 @@
             </div>
         </div>
 
-        <!-- ── 用户课表（管理员）── -->
-        <div class="card" id="users-card" style="display:none">
+        <!-- 用户课表 -->
+        <div class="card admin-only" data-tab="admin" id="users-card">
             <div class="card-header">
                 <h2>用户课表</h2>
                 <span class="badge badge-admin">管理员</span>
@@ -793,6 +890,47 @@
             <div class="card-body">
                 <div class="hint" style="margin-bottom:12px">仅展示已缓存的周次，不会主动请求教务系统。</div>
                 <div id="users-list">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 管理员（仅超级管理员） -->
+        <div class="card super-only" data-tab="admin" id="admins-card">
+            <div class="card-header">
+                <h2>管理员</h2>
+                <span class="badge badge-admin">超级管理员</span>
+            </div>
+            <div class="card-body">
+                <div class="hint" style="margin-bottom:12px">超级管理员由服务器环境变量 ADMIN_USERS 配置。普通管理员在此添加，除本项外权限与超级管理员相同，添加或移除后立即生效，无需重新登录。</div>
+                <div class="share-create-form" style="margin-bottom:14px">
+                    <div class="share-create-fields">
+                        <div class="field" style="margin:0;flex:1">
+                            <label>添加普通管理员</label>
+                            <input type="text" id="admin-add-username" placeholder="输入学号 / 用户名" maxlength="64" onkeydown="if(event.key==='Enter') addAdmin()">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary share-create-btn" id="admin-add-btn" onclick="addAdmin()">添加</button>
+                </div>
+                <div class="section-label">管理员列表</div>
+                <div id="admins-list">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 服务管理 -->
+        <div class="card admin-only" data-tab="admin">
+            <div class="card-header">
+                <h2>服务管理</h2>
+                <span class="badge badge-admin">管理员</span>
+            </div>
+            <div class="card-body">
+                <div class="action-list">
+                    <div class="action-row">
+                        <div class="action-row-text">
+                            <div class="action-row-title">重启服务</div>
+                            <div class="action-row-desc">会中断所有用户会话，请谨慎操作</div>
+                        </div>
+                        <button class="btn btn-danger btn-sm" id="restart-btn" onclick="restartService()" disabled>重启</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -829,7 +967,7 @@
         let maxWeekForExport = 20;
         let adminUsersList = [];
         const BUTTON_MODE_KEY = 'schedule_button_mode';
-        const ADVANCED_PANEL_KEY = 'schedule_advanced_options_open';
+        const SETTINGS_TAB_KEY = 'schedule_settings_tab';
         const SHOW_COURSE_TIME_KEY = 'schedule_show_course_time';
         const SHOW_COURSE_LOCATION_KEY = 'schedule_show_course_location';
         const SHOW_EMOJI_KEY = 'schedule_show_emoji';
@@ -967,18 +1105,23 @@
             showAdvancedSaveStatus._timer = setTimeout(() => el.classList.remove('show'), 2500);
         }
 
-        function syncAdvancedPanel(open) {
-            const panel = document.getElementById('advanced-panel');
-            const toggle = document.getElementById('advanced-toggle');
-            if (!panel || !toggle) return;
-            panel.classList.toggle('open', open);
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            writeLocalPreference(ADVANCED_PANEL_KEY, open ? '1' : '0');
+        // ── 页签（仅管理员） ──
+        function selectTab(tab) {
+            if (tab !== 'admin') tab = 'user';
+            document.body.classList.toggle('tab-user', tab === 'user');
+            document.body.classList.toggle('tab-admin', tab === 'admin');
+            document.getElementById('tab-user').classList.toggle('active', tab === 'user');
+            document.getElementById('tab-admin').classList.toggle('active', tab === 'admin');
+            writeLocalPreference(SETTINGS_TAB_KEY, tab);
         }
 
-        function toggleAdvancedOptions() {
-            const panel = document.getElementById('advanced-panel');
-            syncAdvancedPanel(!panel.classList.contains('open'));
+        // ── 通用折叠段 ──
+        function toggleAcc(key) {
+            const panel = document.getElementById(`acc-${key}-panel`);
+            const toggle = document.getElementById(`acc-${key}-toggle`);
+            const open = !panel.classList.contains('open');
+            panel.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
 
         function loadAdvancedOptions() {
@@ -993,7 +1136,6 @@
             document.getElementById('show-emoji').checked = showEmoji === '1';
             document.getElementById('colorful-courses').checked = colorfulCourses === 'true';
             syncChipMode(mode);
-            syncAdvancedPanel(readLocalPreference(ADVANCED_PANEL_KEY, '0') === '1');
             loadThemeColors();
         }
 
@@ -1076,9 +1218,12 @@
             }
 
             if (isAdmin) {
-                document.getElementById('admin-card').style.display = 'block';
-                document.getElementById('groups-card').style.display = 'block';
-                document.getElementById('users-card').style.display = 'block';
+                document.body.classList.add('is-admin');
+                if (data.admin_role === 'super') {
+                    document.body.classList.add('is-super');
+                    loadAdmins();
+                }
+                selectTab(readLocalPreference(SETTINGS_TAB_KEY, 'user'));
                 document.getElementById('fetch_interval').disabled = false;
                 document.getElementById('slot34_special_pattern').disabled = false;
                 document.getElementById('save-admin-btn').disabled = false;
@@ -1135,6 +1280,80 @@
                 }
             } finally {
                 btn.disabled = false; btn.textContent = '保存';
+            }
+        }
+
+        // ── 管理员管理（仅超级管理员） ──────────────────────────────────────
+        function renderAdmins(admins, me) {
+            const el = document.getElementById('admins-list');
+            if (!admins.length) { el.innerHTML = '<div class="empty-hint">暂无管理员</div>'; return; }
+            el.innerHTML = admins.map(a => {
+                const isSuper = a.role === 'super';
+                const roleBadge = isSuper
+                    ? '<span class="badge badge-admin">超级管理员</span>'
+                    : '<span class="badge badge-user">普通管理员</span>';
+                const meTag = a.username === me ? '<span style="color:var(--c-muted);font-size:0.75rem">（我）</span>' : '';
+                const meta = isSuper
+                    ? '<span style="color:var(--c-muted);font-size:0.75rem">环境变量配置</span>'
+                    : `<span style="color:var(--c-muted);font-size:0.75rem">由 ${esc(a.created_by || '-')} 添加 · ${a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}</span>`;
+                const removeBtn = isSuper ? '' : `<button class="btn btn-danger btn-sm" onclick="removeAdmin('${esc(a.username)}')">移除</button>`;
+                return `<div class="token-row">
+                    <strong>${esc(a.name || a.username)}</strong>
+                    ${a.name ? `<span style="color:#999;font-size:0.85rem">· ${esc(a.username)}</span>` : ''}
+                    ${roleBadge}${meTag}
+                    <span style="flex:1"></span>
+                    ${meta}
+                    ${removeBtn}
+                </div>`;
+            }).join('');
+        }
+
+        async function loadAdmins() {
+            try {
+                const resp = await fetch('/api/admin/admins', { credentials: 'include' });
+                const data = await resp.json();
+                if (data.success) renderAdmins(data.admins, data.me);
+                else document.getElementById('admins-list').innerHTML = `<div class="empty-hint">${esc(data.error || data.message || '加载失败')}</div>`;
+            } catch (e) {
+                document.getElementById('admins-list').innerHTML = '<div class="empty-hint">加载失败</div>';
+            }
+        }
+
+        async function addAdmin() {
+            const input = document.getElementById('admin-add-username');
+            const username = input.value.trim();
+            if (!username) { input.focus(); return; }
+            const btn = document.getElementById('admin-add-btn');
+            btn.disabled = true;
+            try {
+                const resp = await safeFetch('/api/admin/admins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username }),
+                });
+                const data = await resp.json();
+                if (data.success) { input.value = ''; renderAdmins(data.admins, data.me); loadUsers(); }
+                else alert(data.message || data.error || '添加失败');
+            } catch (e) {
+                alert('添加失败，请检查网络');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function removeAdmin(username) {
+            if (!confirm(`确定移除普通管理员 ${username}？`)) return;
+            try {
+                const resp = await safeFetch('/api/admin/admins/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username }),
+                });
+                const data = await resp.json();
+                if (data.success) { renderAdmins(data.admins, data.me); loadUsers(); }
+                else alert(data.message || data.error || '移除失败');
+            } catch (e) {
+                alert('移除失败，请检查网络');
             }
         }
 
@@ -1318,6 +1537,14 @@
             });
         }
 
+        function updateAnnStatus(key) {
+            const on = document.getElementById(`ann-${key}-enabled`).checked;
+            const el = document.getElementById(`ann-${key}-status`);
+            el.textContent = on ? '已启用' : '未启用';
+            el.classList.toggle('badge-on', on);
+            el.classList.toggle('badge-off', !on);
+        }
+
         function applyAnnouncementConfig(cfg) {
             ANN_FORMS.forEach(f => {
                 const c = cfg[f] || {};
@@ -1325,10 +1552,12 @@
                 annEl(f, 'max-views').value = c.max_views ?? 0;
                 annEl(f, 'dismissible').checked = c.dismissible !== false;
                 setAnnouncementHtml(f, c.content || '');
+                updateAnnStatus(f);
             });
             document.getElementById('ann-ad-enabled').checked = !!cfg.ad_enabled;
             document.getElementById('ann-ad-position').value = cfg.ad_position || 'page_below';
             document.getElementById('ann-ad-html').value = cfg.ad_html || '';
+            updateAnnStatus('ad');
             updateAdPreview();
         }
 
@@ -1734,7 +1963,7 @@
                     ).join('');
                     const loginStr = formatLoginTime(u.last_active);
                     const groupLabel = u.group_name ? `<span style="color:var(--c-primary);font-size:0.75rem;margin-left:4px" class="user-group-tag" data-username="${esc(u.username)}">[${esc(u.group_name)}]</span>` : '';
-                    const adminLabel = u.is_admin ? '<span style="color:#cf1322;font-size:0.75rem;margin-left:4px">[管理员]</span>' : '';
+                    const adminLabel = u.is_admin ? `<span style="color:#cf1322;font-size:0.75rem;margin-left:4px">[${u.admin_role === 'super' ? '超级管理员' : '管理员'}]</span>` : '';
                     const groupBtn = u.is_admin
                         ? ''
                         : `<button class="btn btn-default btn-sm" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})">设置组</button>`;
