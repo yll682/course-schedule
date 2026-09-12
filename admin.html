@@ -1730,14 +1730,21 @@
                     }));
                 }
 
-                // 5. 强制完全重新加载（绕过缓存）
+                // 5. 以绕过 HTTP 缓存的方式重新拉取各页面，覆盖浏览器 HTTP 缓存中的旧副本。
+                //    仅跳转到带随机参数的 URL 是不够的：原始地址 /admin.html 的旧缓存不会被刷新，
+                //    下次从课表页点回来仍会拿到旧页面。
+                const pages = ['/', '/index.html', '/admin.html', '/login.html', '/sw.js', '/style.css', '/non-critical.css'];
+                await Promise.all(pages.map(u =>
+                    fetch(u, { cache: 'reload', credentials: 'include' }).catch(() => {})
+                ));
+
                 const el = document.getElementById('cache-clear-status');
                 el.textContent = '✓ 缓存已清空，正在重新加载...';
                 el.style.display = 'block';
 
-                // 使用 location.replace 强制重新加载，绕过浏览器缓存
+                // 回到原始地址（不带参数），此时 HTTP 缓存中已是新副本
                 setTimeout(() => {
-                    window.location.replace(window.location.href + '?nocache=' + Date.now());
+                    window.location.replace(window.location.pathname);
                 }, 800);
             } catch (e) {
                 console.error('Clear cache error:', e);
