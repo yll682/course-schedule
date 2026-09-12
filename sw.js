@@ -1,4 +1,4 @@
-const CACHE = 'kechenbiao-v23';
+const CACHE = 'kechenbiao-v24';
 const STATIC = ['/', '/index.html', '/login.html', '/admin.html', '/style.css', '/non-critical.css', '/icon.svg', '/manifest.json', '/ibm-plex-sans-sc.css'];
 const FONT_URLS = [
     '/fonts/IBMPlexSansSC-Regular.woff2',
@@ -10,8 +10,8 @@ const FONT_URLS = [
 self.addEventListener('install', e => {
     e.waitUntil(
         caches.open(CACHE).then(c => {
-            // 先缓存静态资源
-            return c.addAll(STATIC).then(() => {
+            // 先缓存静态资源（cache: 'reload' 绕过浏览器 HTTP 缓存，确保拿到最新版本）
+            return c.addAll(STATIC.map(u => new Request(u, { cache: 'reload' }))).then(() => {
                 // 然后缓存字体（字体较大，独立处理）
                 return Promise.all(
                     FONT_URLS.map(url =>
@@ -28,6 +28,10 @@ self.addEventListener('install', e => {
         })
     );
     self.skipWaiting();
+});
+
+self.addEventListener('message', e => {
+    if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
@@ -77,12 +81,32 @@ self.addEventListener('fetch', e => {
         return;
     }
 
-    // 同源静态资源：缓存优先（性能优化）
+    // HTML 页面：网络优先（绕过 HTTP 缓存），离线时回退到缓存。
+    // 页面结构更新必须立即可见，不能等 stale-while-revalidate 的下一次访问
+    const isPage = e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/';
+    if (isPage) {
+        e.respondWith(
+            fetch(e.request, { cache: 'no-store' })
+                .then(resp => {
+                    if (resp.ok) {
+                        const respToCache = resp.clone();
+                        caches.open(CACHE).then(cache => cache.put(e.request, respToCache));
+                    }
+                    return resp;
+                })
+                .catch(() => caches.match(e.request).then(cached =>
+                    cached || new Response('', { status: 408, statusText: 'Network error' })
+                ))
+        );
+        return;
+    }
+
+    // 其余同源静态资源：缓存优先（性能优化）
     e.respondWith(
         caches.match(e.request).then(cached => {
             if (cached) {
-                // 有缓存就先用，后台异步更新（stale-while-revalidate）
-                fetch(e.request).then(resp => {
+                // 有缓存就先用，后台异步更新（stale-while-revalidate，绕过 HTTP 缓存）
+                fetch(e.request, { cache: 'no-cache' }).then(resp => {
                     if (resp.ok) {
                         caches.open(CACHE).then(cache => cache.put(e.request, resp));
                     }

@@ -158,16 +158,19 @@ def set_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
 
     # 添加静态资源缓存头（性能优化）
+    # 注意：路由已显式设置 Cache-Control 的响应（HTML、sw.js、API 等）不在此覆盖，
+    # 否则 HTML / Service Worker 会被浏览器 HTTP 缓存一天，发布新版本后用户看不到更新
     path = request.path
-    # 字体文件：长期缓存（1年）
-    if path.startswith('/fonts/') and path.endswith('.woff2'):
-        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    # CSS、JS、静态页面：中等缓存（1天）
-    elif path.endswith('.css') or path.endswith('.js') or path in ['/index.html', '/login.html', '/admin.html']:
-        response.headers['Cache-Control'] = 'public, max-age=86400'
-    # 图片、manifest：中等缓存
-    elif path.endswith('.svg') or path.endswith('.png') or path.endswith('.jpg') or path == '/manifest.json':
-        response.headers['Cache-Control'] = 'public, max-age=86400'
+    if 'Cache-Control' not in response.headers:
+        # 字体文件：长期缓存（1年）
+        if path.startswith('/fonts/') and path.endswith('.woff2'):
+            response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        # CSS：中等缓存（1天），Service Worker 版本升级时会重新拉取
+        elif path.endswith('.css'):
+            response.headers['Cache-Control'] = 'public, max-age=86400'
+        # 图片、manifest：中等缓存
+        elif path.endswith('.svg') or path.endswith('.png') or path.endswith('.jpg') or path == '/manifest.json':
+            response.headers['Cache-Control'] = 'public, max-age=86400'
 
     # 添加 Content-Security-Policy
     # 注意：这是一个严格的 CSP 策略，只允许同源资源
@@ -489,8 +492,11 @@ def static_files(path):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
-    # CSS、图片、字体等资源缓存 1 小时，Service Worker 更新时会清除旧缓存
-    elif ext in ['.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.woff', '.woff2', '.ttf', '.eot']:
+    # 字体文件内容不变，长期缓存（1 年）
+    elif ext in ['.woff', '.woff2', '.ttf', '.eot']:
+        response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    # CSS、图片等资源缓存 1 小时，Service Worker 更新时会清除旧缓存
+    elif ext in ['.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp']:
         response.headers['Cache-Control'] = 'public, max-age=3600'
 
     return response
