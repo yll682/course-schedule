@@ -204,7 +204,7 @@ async function loadSemesters(force = false) {
             : await requestGrades(`${gradeApi}/semesters`);
         if (adminView) {
             const targetName = payload.target_name || targetUser;
-            pageTitle.textContent = `💯 ${targetName}的成绩`;
+            pageTitle.textContent = `${targetName}的成绩`;
             adminViewBanner.textContent = `管理员查看 · ${targetName}（${payload.target_user || targetUser}）· 仅显示服务器缓存`;
             adminViewBanner.hidden = false;
         }
