@@ -4,24 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>查询成绩 - 课程表</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1890ff">
+    <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="preload" href="/fonts/IBMPlexSansSC-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IBMPlexSansSC-Medium.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/ibm-plex-sans-sc.css">
+    <script>
+        (function() {
+            try {
+                var saved = localStorage.getItem('schedule_theme_color');
+                if (saved) {
+                    var theme = JSON.parse(saved);
+                    var root = document.documentElement;
+                    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                    var colors = isDark ? theme.dark : theme.light;
+                    root.style.setProperty('--c-primary', colors.primary);
+                    root.style.setProperty('--c-accent', colors.accent);
+                    root.style.setProperty('--c-course', colors.course);
+                }
+            } catch(e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/style.css">
     <style>
-        body { padding: 16px 16px 40px; }
-        main { max-width: 900px; margin: auto; }
-        header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-        h1 { font-size: 1.2rem; margin: 0; }
-        a { color: var(--c-accent); }
-        button, select, .back-link {
-            font: inherit; color: var(--c-text); background: var(--c-surface);
-            border: 1px solid var(--c-border-input); border-radius: 8px; padding: 9px 12px;
+        body { padding: 16px 16px 32px; }
+        .container { max-width: 980px; margin: 0 auto; }
+        .page-header {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 16px; padding-bottom: 14px;
+            border-bottom: 1px solid var(--c-border-soft);
         }
-        .back-link { text-decoration: none; white-space: nowrap; }
+        .page-title { margin: 0; font-size: 1.15rem; line-height: 1.35; font-weight: 600; flex: 1; }
+        a { color: var(--c-accent); }
+        button, select, .back-btn {
+            color: var(--c-text); background: var(--c-input); font-family: inherit;
+            border: 1px solid var(--c-border-input); border-radius: 8px;
+        }
+        .back-btn { padding: 6px 12px; background: var(--c-surface); font-size: .85rem; text-decoration: none; white-space: nowrap; }
+        .back-btn:hover { background: var(--c-hover); border-color: var(--c-primary); }
         button { cursor: pointer; }
+        #refresh { padding: 7px 16px; font-size: .84rem; font-weight: 500; white-space: nowrap; }
         button:disabled, select:disabled { opacity: .6; cursor: default; }
         :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 3px; }
-        .filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        select { flex: 1; min-width: 150px; }
+        .filters {
+            display: flex; flex-wrap: wrap; align-items: center;
+            gap: 10px; padding: 12px 14px;
+            border: 1px solid var(--c-border-soft); border-radius: 12px;
+            background: var(--c-surface);
+        }
+        .semester-filter { display: flex; flex: 1 1 320px; align-items: center; gap: 10px; min-width: 0; }
+        .semester-filter label { font-size: .82rem; font-weight: 500; white-space: nowrap; }
+        select { flex: 1; min-width: 150px; height: 38px; padding: 8px 11px; font-size: .88rem; }
         .filter-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
         .filter-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; }
         .toggle-track { width: 38px; height: 22px; padding: 2px; border-radius: 999px; background: var(--c-border-input); transition: background .15s; }
@@ -30,35 +64,75 @@
         .filter-toggle input:checked + .toggle-track::after { transform: translateX(16px); }
         .filter-toggle input:focus-visible + .toggle-track { outline: 2px solid var(--c-accent); outline-offset: 3px; }
         .filter-toggle input:disabled + .toggle-track { opacity: .55; }
-        #status { line-height: 1.7; margin: 20px 0; }
-        #summary { display: flex; gap: 12px 24px; flex-wrap: wrap; padding: 16px; margin: 20px 0; background: var(--c-surface); border-radius: 12px; }
+        #status { font-size: .9rem; line-height: 1.5; margin: 14px 0; }
+        #summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px 18px; padding: 12px 14px; margin: 14px 0; background: var(--c-surface); border-radius: 12px; }
         #summary[hidden], [hidden] { display: none; }
-        .table-wrap { overflow-x: auto; border: 1px solid var(--c-border); border-radius: 12px; background: var(--c-surface); }
-        table { border-collapse: collapse; width: 100%; text-align: left; font-size: .9rem; }
-        caption { text-align: left; padding: 16px; font-weight: 600; }
-        th, td { padding: 12px 14px; border-top: 1px solid var(--c-border-soft); }
-        th { background: var(--c-subtle); white-space: nowrap; }
-        td { min-width: 80px; }
-        td:first-child { min-width: 180px; overflow-wrap: anywhere; }
-        td:nth-child(2) { font-weight: 600; color: var(--c-accent); }
-        .course-code { display: block; color: var(--c-hint); font-size: .75rem; margin-top: 4px; }
-        td.failing-grade { color: #cf1322; }
-        .admin-view { padding: 10px 14px; margin: 0 0 18px; border: 1px solid #91caff; border-radius: 8px; background: #e6f4ff; color: #0958d9; }
-        .hint { color: var(--c-hint); font-size: .85rem; line-height: 1.7; }
+        .summary-item { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+        .summary-label { color: var(--c-hint); font-size: .75rem; white-space: nowrap; }
+        .summary-value { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+        .grades-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+            gap: 10px;
+            align-items: stretch;
+        }
+        .grade-card {
+            padding: 12px 14px;
+            border: 1px solid var(--c-border);
+            border-radius: 12px;
+            background: var(--c-surface);
+        }
+        .grade-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .grade-course { min-width: 0; font-size: 1rem; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
+        .grade-score { flex: none; color: var(--c-accent); font-size: 1.1rem; font-weight: 600; line-height: 1.4; }
+        .course-code { display: block; color: var(--c-hint); font-size: .72rem; margin-top: 2px; }
+        .grade-score.failing-grade { color: #cf1322; }
+        .grade-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+            gap: 6px 12px;
+            margin: 8px 0 0;
+            padding-top: 8px;
+            border-top: 1px solid var(--c-border-soft);
+        }
+        .grade-meta-item { min-width: 0; }
+        .grade-meta dt { color: var(--c-hint); font-size: .72rem; line-height: 1.3; }
+        .grade-meta dd { margin: 1px 0 0; font-size: .84rem; line-height: 1.35; overflow-wrap: anywhere; }
+        .admin-view { padding: 9px 12px; margin: 0 0 14px; border: 1px solid #91caff; border-radius: 8px; background: #e6f4ff; color: #0958d9; font-size: .875rem; }
+        .hint { color: var(--c-hint); font-size: .78rem; line-height: 1.5; margin-top: 12px; }
+        @media (max-width: 640px) {
+            body { padding: 10px 10px 24px; }
+            .page-header { margin-bottom: 10px; padding-bottom: 10px; }
+            .page-title { font-size: 1.1rem; }
+            .filters { gap: 8px; padding: 10px; }
+            .filter-toggle { font-size: .875rem; }
+            #status { margin: 10px 2px; font-size: .875rem; }
+            #summary { gap: 8px 12px; padding: 10px 12px; margin: 10px 0; }
+            .summary-item { display: block; }
+            .summary-label, .summary-value { display: block; }
+            .summary-label { margin-bottom: 1px; font-size: .75rem; }
+            .summary-value { font-size: 1rem; }
+            .grades-list { gap: 8px; }
+            .grade-card { padding: 10px 12px; border-radius: 10px; }
+            .course-code { font-size: .75rem; }
+            .hint { margin: 10px 2px 0; font-size: .75rem; }
+        }
         @media (prefers-color-scheme: dark) {
-            td.failing-grade { color: #ff7875; }
+            .grade-score.failing-grade { color: #ff7875; }
             .admin-view { border-color: #15395b; background: #111d2c; color: #69b1ff; }
         }
     </style>
     <script src="/grades.js" defer></script>
 </head>
 <body>
-    <main>
-        <header><a class="back-link" id="back-link" href="/">← 课程表</a><h1 id="page-title">查询成绩</h1></header>
+    <main class="container">
+        <header class="page-header"><a class="back-btn" id="back-link" href="/">← 课程表</a><h1 class="page-title" id="page-title">查询成绩</h1></header>
         <p class="admin-view" id="admin-view" hidden></p>
         <div class="filters">
-            <label for="semester">学期</label>
-            <select id="semester" disabled><option value="">正在获取学期…</option></select>
+            <div class="semester-filter">
+                <label for="semester">学期</label>
+                <select id="semester" disabled><option value="">正在获取学期…</option></select>
+            </div>
             <label class="filter-toggle">
                 <input id="best-only" type="checkbox" disabled>
                 <span class="toggle-track" aria-hidden="true"></span>
@@ -70,15 +144,11 @@
         <p id="login-help" hidden><a href="/login.html">重新登录</a></p>
         <section id="results" aria-label="学期成绩" aria-busy="true">
             <div id="summary" hidden></div>
-            <div id="table-wrap" class="table-wrap" hidden tabindex="0" aria-label="成绩表，可横向滚动">
-                <table>
-                    <caption id="grades-caption"></caption>
-                    <thead><tr><th scope="col">课程</th><th scope="col">成绩</th><th scope="col">学分</th><th scope="col">课程属性</th><th scope="col">课程性质</th><th scope="col">考试性质</th></tr></thead>
-                    <tbody id="grades-body"></tbody>
-                </table>
+            <div id="grades-wrap" hidden aria-label="成绩列表">
+                <div id="grades-list" class="grades-list" role="list"></div>
             </div>
         </section>
-        <p class="hint">成绩与统计数据来自教务系统。手机上可以横向滚动查看完整表格。</p>
+        <p class="hint">成绩与统计数据来自教务系统。</p>
     </main>
 </body>
 </html>

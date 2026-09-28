@@ -3,8 +3,8 @@ const refreshButton = document.getElementById('refresh');
 const statusText = document.getElementById('status');
 const results = document.getElementById('results');
 const summary = document.getElementById('summary');
-const tableWrap = document.getElementById('table-wrap');
-const gradesBody = document.getElementById('grades-body');
+const gradesWrap = document.getElementById('grades-wrap');
+const gradesList = document.getElementById('grades-list');
 const loginHelp = document.getElementById('login-help');
 const pageTitle = document.getElementById('page-title');
 const backLink = document.getElementById('back-link');
@@ -25,6 +25,12 @@ const qualitativeGradeRanks = new Map([
     ['不及格', 0], ['不合格', 0], ['未通过', 0],
 ]);
 const failingGradeLabels = new Set(['不及格', '不合格', '未通过']);
+const gradeColumns = [
+    ['credit', '学分'],
+    ['curriculumAttributes', '属性'],
+    ['courseNature', '性质'],
+    ['examinationNature', '考试'],
+];
 
 if (adminView) {
     backLink.href = '/admin.html';
@@ -78,10 +84,10 @@ function setLoading(loading) {
 }
 
 function clearGrades() {
-    gradesBody.replaceChildren();
+    gradesList.replaceChildren();
     summary.replaceChildren();
     summary.hidden = true;
-    tableWrap.hidden = true;
+    gradesWrap.hidden = true;
     loginHelp.hidden = true;
     currentGradeData = null;
     currentGradePayload = null;
@@ -93,12 +99,6 @@ function isFailingGrade(value) {
     if (failingGradeLabels.has(normalizedValue)) return true;
     const numericValue = Number(normalizedValue);
     return Number.isFinite(numericValue) && numericValue < 60;
-}
-
-function formatCacheTime(value) {
-    if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('zh-CN');
 }
 
 function gradeRank(value) {
@@ -122,52 +122,81 @@ function highestGrades(achievements) {
 }
 
 function renderGrades(data, payload) {
-    gradesBody.replaceChildren();
+    gradesList.replaceChildren();
     summary.replaceChildren();
     const allAchievements = data.achievement;
     const achievements = bestOnlyToggle.checked ? highestGrades(allAchievements) : allAchievements;
     const courseKeys = allAchievements.map(grade => grade.kcbh || grade.courseName);
     const courseCount = new Set(courseKeys).size;
-    const cacheTime = formatCacheTime(payload.cache_time);
-    const cacheStatus = payload.from_cache && cacheTime ? ` · 缓存于 ${cacheTime}` : '';
     const refreshStatus = payload.refreshing ? ' · 正在后台刷新' : '';
     const recordStatus = bestOnlyToggle.checked
         ? `显示 ${achievements.length} 条最高成绩 · 全部 ${allAchievements.length} 条记录`
         : `共 ${allAchievements.length} 条成绩记录 · ${courseCount} 门课程`;
     statusText.textContent = achievements.length
-        ? `${recordStatus}${cacheStatus}${refreshStatus}`
-        : `该学期暂无已发布成绩${cacheStatus}${refreshStatus}`;
+        ? `${recordStatus}${refreshStatus}`
+        : `该学期暂无已发布成绩${refreshStatus}`;
     for (const [label, value] of [
         ['平均成绩', data.pjcj], ['平均学分绩点', data.pjxfjd],
         ['已修总学分', data.yxzxf], ['总学分绩点', data.zxfjd],
     ]) {
         if (value === '' || value === null || value === undefined) continue;
         const item = document.createElement('span');
-        item.textContent = `${label}：${value}`;
+        item.className = 'summary-item';
+        const itemLabel = document.createElement('span');
+        itemLabel.className = 'summary-label';
+        itemLabel.textContent = label;
+        const itemValue = document.createElement('span');
+        itemValue.className = 'summary-value';
+        itemValue.textContent = value;
+        item.append(itemLabel, itemValue);
         summary.append(item);
     }
     summary.hidden = !summary.childElementCount;
-    document.getElementById('grades-caption').textContent = semesterSelect.selectedOptions[0].textContent;
     for (const grade of achievements) {
-        const row = document.createElement('tr');
-        row.dataset.gradeId = grade.cj0708id || '';
-        for (const key of ['courseName', 'fraction', 'credit', 'curriculumAttributes', 'courseNature', 'examinationNature']) {
-            const cell = document.createElement('td');
-            cell.textContent = grade[key] === '' || grade[key] == null ? '—' : String(grade[key]);
-            if (key === 'courseName' && grade.kcbh) {
-                const code = document.createElement('span');
-                code.className = 'course-code';
-                code.textContent = grade.kcbh;
-                cell.append(code);
-            }
-            if (key === 'fraction' && isFailingGrade(grade[key])) {
-                cell.classList.add('failing-grade');
-            }
-            row.append(cell);
+        const card = document.createElement('article');
+        card.className = 'grade-card';
+        card.dataset.gradeId = grade.cj0708id || '';
+        card.setAttribute('role', 'listitem');
+
+        const cardHead = document.createElement('div');
+        cardHead.className = 'grade-card-head';
+        const course = document.createElement('div');
+        course.className = 'grade-course';
+        course.textContent = grade.courseName === '' || grade.courseName == null
+            ? '—'
+            : String(grade.courseName);
+        if (grade.kcbh) {
+            const code = document.createElement('span');
+            code.className = 'course-code';
+            code.textContent = grade.kcbh;
+            course.append(code);
         }
-        gradesBody.append(row);
+        const score = document.createElement('span');
+        score.className = 'grade-score';
+        score.textContent = grade.fraction === '' || grade.fraction == null
+            ? '—'
+            : String(grade.fraction);
+        if (isFailingGrade(grade.fraction)) score.classList.add('failing-grade');
+        cardHead.append(course, score);
+
+        const metadata = document.createElement('dl');
+        metadata.className = 'grade-meta';
+        for (const [key, label] of gradeColumns) {
+            const item = document.createElement('div');
+            item.className = 'grade-meta-item';
+            const term = document.createElement('dt');
+            term.textContent = label;
+            const description = document.createElement('dd');
+            description.textContent = grade[key] === '' || grade[key] == null
+                ? '—'
+                : String(grade[key]);
+            item.append(term, description);
+            metadata.append(item);
+        }
+        card.append(cardHead, metadata);
+        gradesList.append(card);
     }
-    tableWrap.hidden = !achievements.length;
+    gradesWrap.hidden = !achievements.length;
 }
 
 async function loadGrades(force = false) {
@@ -182,7 +211,7 @@ async function loadGrades(force = false) {
             })
             : await requestGrades(`${gradeApi}?semester=${encodeURIComponent(semesterSelect.value)}`);
         if (payload.record_scope !== 'all') {
-            throw new Error('服务器成绩缓存格式已更新，请重启服务后刷新页面');
+            throw new Error('服务器成绩数据格式已更新，请重启服务后刷新页面');
         }
         currentGradeData = payload.data;
         currentGradePayload = payload;
@@ -205,7 +234,7 @@ async function loadSemesters(force = false) {
         if (adminView) {
             const targetName = payload.target_name || targetUser;
             pageTitle.textContent = `${targetName}的成绩`;
-            adminViewBanner.textContent = `管理员查看 · ${targetName}（${payload.target_user || targetUser}）· 仅显示服务器缓存`;
+            adminViewBanner.textContent = `管理员查看 · ${targetName}（${payload.target_user || targetUser}）`;
             adminViewBanner.hidden = false;
         }
         semesterSelect.replaceChildren();
