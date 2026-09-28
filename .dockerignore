@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.work/
 *.pyc
 *.pyo
 *.pyd
@@ -11,6 +12,8 @@ ENV/
 
 # 数据库和密钥文件
 *.db
+*.db-shm
+*.db-wal
 *.db-journal
 .env
 .secret_key

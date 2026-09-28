@@ -206,6 +206,7 @@ body { padding: 10px; }
             </div>
             <h1>📚 课程表</h1>
             <div class="header-side right">
+                <button class="icon-btn" id="grades-btn" onclick="location.href='/grades.html'" title="查询成绩" aria-label="查询成绩" style="display:none">💯</button>
                 <button class="icon-btn" id="settings-btn" onclick="location.href='/admin.html'" title="设置">⚙</button>
                 <button class="icon-btn" id="exit-btn" onclick="handleExit()" style="display:none">退出</button>
             </div>
@@ -1321,6 +1322,8 @@ body { padding: 10px; }
             }
 
 
+
+            if (!adminViewUser) document.getElementById('grades-btn').style.display = '';
 
             if (adminViewUser && data.is_admin) {
                 adminViewMode = true;

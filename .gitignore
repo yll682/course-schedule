@@ -1,4 +1,5 @@
 __pycache__/
+.work/
 *.pyc
 *.log
 
@@ -6,6 +7,8 @@ __pycache__/
 
 # 数据库（含用户凭据，不入库）
 *.db
+*.db-shm
+*.db-wal
 
 # 抓包分析产物
 captured_*.json

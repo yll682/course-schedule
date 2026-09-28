@@ -135,6 +135,35 @@ def get_timetable_raw(token: str, week, kbjcmsid: str) -> dict:
     return resp.json()["data"][0]
 
 
+class GradeRequestError(RuntimeError):
+    pass
+
+
+def _grade_request(token: str, endpoint: str, params=None):
+    with _session(token) as sess:
+        response = sess.post(f"{BASE_URL}/{endpoint}", params=params, timeout=(5, 10))
+        response.raise_for_status()
+        payload = response.json()
+    if str(payload.get("code")) != "1":
+        raise GradeRequestError("教务系统拒绝查询，请重新登录后重试")
+    return payload["data"]
+
+
+def get_grade_semesters(token: str) -> dict:
+    current = _grade_request(token, "currentTerm")
+    semesters = _grade_request(token, "semesterList")
+    if len(current) != 1 or not isinstance(semesters, list):
+        raise GradeRequestError("教务系统返回的学期数据格式异常")
+    return {"current_semester": current[0]["semesterId"], "semesters": semesters}
+
+
+def get_term_grades(token: str, semester: str) -> dict:
+    data = _grade_request(token, "student/termGPA", {"semester": semester, "type": ""})
+    if len(data) != 1 or not isinstance(data[0]["achievement"], list):
+        raise GradeRequestError("教务系统返回的成绩数据格式异常")
+    return data[0]
+
+
 # ── 数据转换 ──────────────────────────────────────────────────────────────────
 
 def _parse_class_time(class_time: str):

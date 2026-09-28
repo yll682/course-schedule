@@ -125,6 +125,8 @@ ADMIN_USERS = [u.strip() for u in os.environ.get('ADMIN_USERS', '2405309121').sp
 ADMIN_ROLE_SUPER = 'super'
 ADMIN_ROLE_ADMIN = 'admin'
 _ADMIN_USERNAME_RE = re.compile(r'^[A-Za-z0-9_.@-]{1,64}$')
+GRADE_CACHE_VERSION_SETTING = 'grade_cache_version'
+GRADE_CACHE_VERSION = 'all-attempts-v1'
 
 
 def _admin_role(username):
@@ -161,6 +163,8 @@ def set_security_headers(response):
     # 注意：路由已显式设置 Cache-Control 的响应（HTML、sw.js、API 等）不在此覆盖，
     # 否则 HTML / Service Worker 会被浏览器 HTTP 缓存一天，发布新版本后用户看不到更新
     path = request.path
+    if path.startswith('/api/grades') or path.startswith('/api/admin/grades'):
+        response.headers['Cache-Control'] = 'private, no-store'
     if 'Cache-Control' not in response.headers:
         # 字体文件：长期缓存（1年）
         if path.startswith('/fonts/') and path.endswith('.woff2'):
@@ -248,8 +252,27 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS courses
                      (username TEXT, week INTEGER, data TEXT, cached_at TEXT,
                       PRIMARY KEY (username, week))''')
+        c.execute('''CREATE TABLE IF NOT EXISTS grade_semesters
+                     (username TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at TEXT NOT NULL)''')
+        c.execute('''CREATE TABLE IF NOT EXISTS grades
+                     (username TEXT, semester TEXT, data TEXT NOT NULL, cached_at TEXT NOT NULL,
+                      query_mode TEXT NOT NULL DEFAULT 'all',
+                      PRIMARY KEY (username, semester))''')
+        try:
+            c.execute("ALTER TABLE grades ADD COLUMN query_mode TEXT NOT NULL DEFAULT 'best'")
+        except sqlite3.OperationalError as e:
+            if 'duplicate column name' not in str(e).lower():
+                logger.warning('数据库迁移警告: %s', e)
         c.execute('''CREATE TABLE IF NOT EXISTS settings
                      (key TEXT PRIMARY KEY, value TEXT)''')
+        c.execute('SELECT value FROM settings WHERE key=?', (GRADE_CACHE_VERSION_SETTING,))
+        grade_cache_version = c.fetchone()
+        if not grade_cache_version or grade_cache_version[0] != GRADE_CACHE_VERSION:
+            c.execute('DELETE FROM grades')
+            c.execute(
+                'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+                (GRADE_CACHE_VERSION_SETTING, GRADE_CACHE_VERSION),
+            )
         c.execute('''CREATE TABLE IF NOT EXISTS share_tokens
                      (token TEXT PRIMARY KEY, owner TEXT NOT NULL,
                       week_from INTEGER NOT NULL, week_to INTEGER NOT NULL,
@@ -376,6 +399,76 @@ def fetch_from_jw(username: str, week: int) -> dict:
     return jw_client.transform_timetable(raw, user_info, result_week)
 
 
+def _cache_is_stale(cached_at: str) -> bool:
+    try:
+        age = (datetime.now() - datetime.fromisoformat(cached_at)).total_seconds()
+        return age > get_setting('fetch_interval', 60) * 60
+    except (ValueError, TypeError):
+        return True
+
+
+def _store_grade_semesters(username: str, data: dict):
+    with _db() as conn:
+        conn.execute(
+            'INSERT OR REPLACE INTO grade_semesters VALUES (?, ?, ?)',
+            (username, json.dumps(data, ensure_ascii=False), datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
+def _store_term_grades(username: str, semester: str, data: dict):
+    with _db() as conn:
+        conn.execute(
+            '''INSERT OR REPLACE INTO grades
+               (username, semester, data, cached_at, query_mode)
+               VALUES (?, ?, ?, ?, 'all')''',
+            (username, semester, json.dumps(data, ensure_ascii=False), datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
+def fetch_grade_semesters_from_jw(username: str) -> dict:
+    token, _, _ = _ensure_token(username)
+    data = jw_client.get_grade_semesters(token)
+    _store_grade_semesters(username, data)
+    return data
+
+
+def fetch_term_grades_from_jw(username: str, semester: str) -> dict:
+    token, _, _ = _ensure_token(username)
+    data = jw_client.get_term_grades(token, semester)
+    _store_term_grades(username, semester, data)
+    return data
+
+
+def _refresh_all_grades_for_user(username: str):
+    token, _, _ = _ensure_token(username)
+    semesters = jw_client.get_grade_semesters(token)
+    _store_grade_semesters(username, semesters)
+    for item in semesters['semesters']:
+        semester = item.get('semesterId', '')
+        if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
+            continue
+        data = jw_client.get_term_grades(token, semester)
+        _store_term_grades(username, semester, data)
+
+
+def _background_refresh_grade_semesters(username: str):
+    try:
+        fetch_grade_semesters_from_jw(username)
+        logger.info('后台刷新成绩学期完成 user=%s', username)
+    except Exception as e:
+        logger.info('后台刷新成绩学期失败 user=%s: %s', username, e)
+
+
+def _background_refresh_term_grades(username: str, semester: str):
+    try:
+        fetch_term_grades_from_jw(username, semester)
+        logger.info('后台刷新成绩完成 user=%s semester=%s', username, semester)
+    except Exception as e:
+        logger.info('后台刷新成绩失败 user=%s semester=%s: %s', username, semester, e)
+
+
 def _background_refresh_user(username: str, week: int):
     """缓存过期时后台异步刷新，不阻塞用户请求"""
     try:
@@ -440,6 +533,11 @@ def background_fetch():
                                     conn.commit()
                             except Exception as e:
                                 logger.info('后台抓取邻近周失败 user=%s week=%d: %s', username, w, e)
+
+                    try:
+                        _refresh_all_grades_for_user(username)
+                    except Exception as e:
+                        logger.info('后台抓取成绩失败 user=%s: %s', username, e)
 
                     # 成功后重置失败计数和跳过计数
                     _user_fail_counts[username] = 0
@@ -643,6 +741,161 @@ def get_user():
     })
 
 
+def _require_grade_user():
+    if 'share_token' in session:
+        return None, (jsonify({'success': False, 'message': '分享模式无法查询成绩'}), 403)
+    if 'username' not in session:
+        return None, (jsonify({'success': False, 'message': '请登录后查询成绩'}), 401)
+    return session['username'], None
+
+
+@app.route('/api/grades/semesters', methods=['GET'])
+def get_grade_semesters():
+    username, error = _require_grade_user()
+    if error:
+        return error
+
+    force = request.args.get('force') == '1'
+    if not force:
+        with _db() as conn:
+            row = conn.execute(
+                'SELECT data, cached_at FROM grade_semesters WHERE username=?',
+                (username,),
+            ).fetchone()
+        if row:
+            stale = _cache_is_stale(row[1])
+            if stale:
+                threading.Thread(
+                    target=_background_refresh_grade_semesters,
+                    args=(username,),
+                    daemon=True,
+                ).start()
+            return jsonify({
+                'success': True,
+                **json.loads(row[0]),
+                'from_cache': True,
+                'cache_time': row[1],
+                'refreshing': stale,
+            })
+
+    data = fetch_grade_semesters_from_jw(username)
+    return jsonify({'success': True, **data, 'from_cache': False})
+
+
+@app.route('/api/grades', methods=['GET'])
+def get_grades():
+    username, error = _require_grade_user()
+    if error:
+        return error
+
+    semester = request.args.get('semester', '')
+    if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
+        return jsonify({'success': False, 'message': '请选择有效学期'}), 400
+
+    force = request.args.get('force') == '1'
+    if not force:
+        with _db() as conn:
+            row = conn.execute(
+                '''SELECT data, cached_at FROM grades
+                   WHERE username=? AND semester=? AND query_mode='all' ''',
+                (username, semester),
+            ).fetchone()
+        if row:
+            stale = _cache_is_stale(row[1])
+            if stale:
+                threading.Thread(
+                    target=_background_refresh_term_grades,
+                    args=(username, semester),
+                    daemon=True,
+                ).start()
+            return jsonify({
+                'success': True,
+                'semester': semester,
+                'data': json.loads(row[0]),
+                'query_mode': 'all',
+                'from_cache': True,
+                'cache_time': row[1],
+                'refreshing': stale,
+            })
+
+    data = fetch_term_grades_from_jw(username, semester)
+    return jsonify({
+        'success': True,
+        'semester': semester,
+        'data': data,
+        'query_mode': 'all',
+        'from_cache': False,
+    })
+
+
+def _admin_grade_user(target_user: str):
+    if 'username' not in session or not _is_current_admin():
+        return None, (jsonify({'success': False, 'message': '无权限'}), 403)
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT jw_name FROM users WHERE username=?',
+            (target_user,),
+        ).fetchone()
+    if not row:
+        return None, (jsonify({'success': False, 'message': '用户不存在'}), 404)
+    return row[0] or target_user, None
+
+
+@app.route('/api/admin/grades/<string:target_user>/semesters', methods=['GET'])
+def admin_grade_semesters(target_user):
+    target_name, error = _admin_grade_user(target_user)
+    if error:
+        return error
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT data, cached_at FROM grade_semesters WHERE username=?',
+            (target_user,),
+        ).fetchone()
+    if not row:
+        return jsonify({'success': False, 'message': '该用户暂无成绩缓存'}), 404
+    return jsonify({
+        'success': True,
+        **json.loads(row[0]),
+        'target_user': target_user,
+        'target_name': target_name,
+        'from_cache': True,
+        'cache_time': row[1],
+    })
+
+
+@app.route('/api/admin/grades/<string:target_user>', methods=['GET'])
+def admin_grades(target_user):
+    target_name, error = _admin_grade_user(target_user)
+    if error:
+        return error
+    semester = request.args.get('semester', '')
+    if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
+        return jsonify({'success': False, 'message': '请选择有效学期'}), 400
+    with _db() as conn:
+        row = conn.execute(
+            '''SELECT data, cached_at FROM grades
+               WHERE username=? AND semester=? AND query_mode='all' ''',
+            (target_user, semester),
+        ).fetchone()
+    if not row:
+        return jsonify({'success': False, 'message': '该学期暂无成绩缓存'}), 404
+    return jsonify({
+        'success': True,
+        'semester': semester,
+        'data': json.loads(row[0]),
+        'query_mode': 'all',
+        'target_user': target_user,
+        'target_name': target_name,
+        'from_cache': True,
+        'cache_time': row[1],
+    })
+
+
+@app.errorhandler(jw_client.GradeRequestError)
+def grade_request_error(error):
+    return jsonify({'success': False, 'message': str(error)}), 502
+
+
 @app.route('/api/week_number', methods=['GET'])
 def get_week_number():
     """根据日期查询对应的学期周次（基于实际缓存数据）"""
@@ -778,13 +1031,7 @@ def get_courses(week):
                           (username, week))
                 cache_row = c.fetchone()
         if cache_row:
-            stale = False
-            try:
-                age = (datetime.now() - datetime.fromisoformat(cache_row[1])).total_seconds()
-                if age > get_setting('fetch_interval', 60) * 60:
-                    stale = True
-            except (ValueError, TypeError):
-                stale = True
+            stale = _cache_is_stale(cache_row[1])
 
             # 有缓存就立即返回，过期则后台异步刷新
             if stale:
@@ -1355,12 +1602,18 @@ def admin_list_users():
             role = ADMIN_ROLE_SUPER if u[0] in ADMIN_USERS else (ADMIN_ROLE_ADMIN if u[0] in db_admins else None)
             c.execute('SELECT week FROM courses WHERE username=? ORDER BY week', (u[0],))
             cached_weeks = [r[0] for r in c.fetchall()]
+            c.execute(
+                "SELECT semester FROM grades WHERE username=? AND query_mode='all' ORDER BY semester DESC",
+                (u[0],),
+            )
+            cached_grade_semesters = [r[0] for r in c.fetchall()]
             result.append({
                 'username':     u[0],
                 'name':         u[1] or u[0],
                 'class_name':   u[2] or '',
                 'last_active':  u[3] or u[4] or '',  # 优先使用 last_active
                 'cached_weeks': cached_weeks,
+                'cached_grade_semesters': cached_grade_semesters,
                 'group_id':     u[5],
                 'group_name':   u[6] or '',
                 'is_admin':     role is not None,
@@ -1621,7 +1874,7 @@ def admin_view(target_user, week):
 @app.route('/api/admin/force_fetch', methods=['POST'])
 @csrf_protected
 def admin_force_fetch():
-    """管理员触发立即为所有用户抓取课表（后台执行，失败保留缓存）"""
+    """管理员触发立即为所有用户抓取课表与成绩（后台执行，失败保留缓存）"""
     if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
 
@@ -1656,6 +1909,10 @@ def admin_force_fetch():
                                 conn.commit()
                         except Exception as e:
                             logger.warning('强制抓取失败 user=%s week=%d: %s', username, w, e)
+                try:
+                    _refresh_all_grades_for_user(username)
+                except Exception as e:
+                    logger.warning('强制抓取成绩失败 user=%s: %s', username, e)
                 ok_count += 1
             except Exception as e:
                 fail_count += 1
@@ -1663,7 +1920,7 @@ def admin_force_fetch():
         logger.info('强制抓取完成：成功 %d 人，失败 %d 人', ok_count, fail_count)
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({'success': True, 'message': '已在后台开始抓取，请稍后刷新查看'})
+    return jsonify({'success': True, 'message': '已在后台开始抓取课表与成绩，请稍后刷新查看'})
 
 
 @app.route('/api/admin/restart', methods=['POST'])
