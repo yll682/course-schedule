@@ -560,6 +560,75 @@ def _refresh_current_grades_for_user(username: str):
     return fetch_term_grades_from_jw(username, semester)
 
 
+def _refresh_all_grades_for_user(username: str):
+    semesters = fetch_grade_semesters_from_jw(username)
+    semester_ids = [
+        semesters['current_semester'],
+        *(item.get('semesterId', '') for item in semesters['semesters']),
+    ]
+    if any(
+        not isinstance(semester, str)
+        or not re.fullmatch(r'\d{4}-\d{4}-[12]', semester)
+        for semester in semester_ids
+    ):
+        raise jw_client.GradeRequestError('教务系统返回的成绩学期格式异常')
+    semester_ids = list(dict.fromkeys(semester_ids))
+    failed_semesters = []
+    for semester in semester_ids:
+        try:
+            fetch_term_grades_from_jw(username, semester)
+        except Exception as error:
+            failed_semesters.append(semester)
+            logger.warning(
+                '全部数据抓取成绩失败 user=%s semester=%s: %s',
+                username,
+                semester,
+                error,
+            )
+    return len(semester_ids) - len(failed_semesters), len(semester_ids), failed_semesters
+
+
+def _store_course_cache(username: str, week: int, data: dict):
+    with _db() as conn:
+        conn.execute(
+            'INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
+            (
+                username,
+                week,
+                json.dumps(data, ensure_ascii=False),
+                datetime.now().isoformat(),
+            ),
+        )
+        conn.commit()
+
+
+def _refresh_all_courses_for_user(username: str):
+    current_data = fetch_from_jw(username, 0)
+    current_week = int(current_data['metadata']['current_week'])
+    max_week = int(current_data['metadata']['max_week'])
+    if not 0 <= current_week <= max_week <= 30 or max_week == 0:
+        raise ValueError('教务系统返回的课表周次范围异常')
+
+    if current_week >= 1:
+        _store_course_cache(username, current_week, current_data)
+    failed_weeks = []
+    for week in range(1, max_week + 1):
+        if week == current_week:
+            continue
+        try:
+            data = fetch_from_jw(username, week)
+            _store_course_cache(username, week, data)
+        except Exception as error:
+            failed_weeks.append(week)
+            logger.warning(
+                '全部数据抓取课表失败 user=%s week=%d: %s',
+                username,
+                week,
+                error,
+            )
+    return max_week - len(failed_weeks), max_week, failed_weeks
+
+
 def _refresh_grade_semesters_if_stale(username: str):
     with _db() as conn:
         row = conn.execute(
@@ -2030,53 +2099,72 @@ def admin_view(target_user, week):
     return jsonify({**json.loads(row[0]), 'from_cache': True, 'cache_time': row[1]})
 
 
+_admin_force_fetch_lock = threading.Lock()
+
+
 @app.route('/api/admin/force_fetch', methods=['POST'])
 @csrf_protected
 def admin_force_fetch():
-    """管理员触发立即为所有用户抓取课表与成绩（后台执行，失败保留缓存）"""
+    """管理员触发所有用户全部课表与成绩缓存抓取"""
     if 'username' not in session or not _is_current_admin():
         return jsonify({'error': '无权限'}), 403
+    if not _admin_force_fetch_lock.acquire(blocking=False):
+        return jsonify({'success': True, 'message': '全部数据抓取任务正在进行，请稍后查看缓存'})
 
     def _run():
-        with _db() as conn:
-            c = conn.cursor()
-            c.execute('SELECT username FROM users WHERE password_enc IS NOT NULL')
-            users = [row[0] for row in c.fetchall()]
+        try:
+            with _db() as conn:
+                users = [
+                    row[0] for row in conn.execute(
+                        'SELECT username FROM users WHERE password_enc IS NOT NULL'
+                    ).fetchall()
+                ]
 
-        ok_count = 0
-        fail_count = 0
-        for username in users:
-            try:
-                data = fetch_from_jw(username, 0)
-                current_week = data['metadata']['current_week']
-                max_week     = data['metadata']['max_week']
-                with _db() as conn:
-                    conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
-                                 (username, current_week,
-                                  json.dumps(data, ensure_ascii=False),
-                                  datetime.now().isoformat()))
-                    conn.commit()
-                for w in [current_week - 1, current_week + 1]:
-                    if 1 <= w <= max_week:
-                        try:
-                            d = fetch_from_jw(username, w)
-                            with _db() as conn:
-                                conn.execute('INSERT OR REPLACE INTO courses VALUES (?, ?, ?, ?)',
-                                             (username, w,
-                                              json.dumps(d, ensure_ascii=False),
-                                              datetime.now().isoformat()))
-                                conn.commit()
-                        except Exception as e:
-                            logger.warning('强制抓取失败 user=%s week=%d: %s', username, w, e)
-                _refresh_current_grades_for_user(username)
-                ok_count += 1
-            except Exception as e:
-                fail_count += 1
-                logger.error('强制抓取失败 user=%s: %s', username, e)
-        logger.info('强制抓取完成：成功 %d 人，失败 %d 人', ok_count, fail_count)
+            ok_count = 0
+            fail_count = 0
+            course_cached = 0
+            course_total = 0
+            grade_cached = 0
+            grade_total = 0
+            for username in users:
+                user_failed = False
+                try:
+                    cached, total, failed = _refresh_all_courses_for_user(username)
+                    course_cached += cached
+                    course_total += total
+                    user_failed = user_failed or bool(failed)
+                except Exception as error:
+                    user_failed = True
+                    logger.error('全部数据抓取课表失败 user=%s: %s', username, error)
+
+                try:
+                    cached, total, failed = _refresh_all_grades_for_user(username)
+                    grade_cached += cached
+                    grade_total += total
+                    user_failed = user_failed or bool(failed)
+                except Exception as error:
+                    user_failed = True
+                    logger.error('全部数据抓取成绩失败 user=%s: %s', username, error)
+
+                if user_failed:
+                    fail_count += 1
+                else:
+                    ok_count += 1
+
+            logger.info(
+                '全部数据抓取完成 users_ok=%d users_failed=%d courses=%d/%d grades=%d/%d',
+                ok_count,
+                fail_count,
+                course_cached,
+                course_total,
+                grade_cached,
+                grade_total,
+            )
+        finally:
+            _admin_force_fetch_lock.release()
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({'success': True, 'message': '已在后台开始抓取课表与当前学期成绩，请稍后刷新查看'})
+    return jsonify({'success': True, 'message': '已开始在后台抓取所有用户的全部课表与全部成绩，请稍后查看缓存'})
 
 
 @app.route('/api/admin/restart', methods=['POST'])

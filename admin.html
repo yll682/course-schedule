@@ -665,7 +665,7 @@
                     <div class="field">
                         <label>自动抓取间隔（分钟）</label>
                         <input type="number" id="fetch_interval" value="60" min="5" max="1440" disabled>
-                        <div class="hint">定时为所有用户抓取上周、当周、下周课表及当前学期成绩；历史学期在用户查询时更新。建议 30–120。</div>
+                        <div class="hint">定时抓取上周、当周、下周课表及当前学期成绩；下方按钮会缓存所有用户的全部周次课表与全部学期成绩。建议 30–120。</div>
                     </div>
                     <div class="field">
                         <label>第 3、4 节特殊时间教学楼</label>
@@ -678,7 +678,7 @@
                         <button class="btn btn-primary" id="save-admin-btn" onclick="saveAdminSettings()" disabled>保存</button>
                         <span class="save-status" id="admin-save-status">✓ 已保存</span>
                     </div>
-                    <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled>立即抓取所有用户</button>
+                    <button class="btn btn-default" id="force-fetch-btn" onclick="forceFetch()" disabled>抓取所有用户全部数据</button>
                 </div>
             </div>
         </div>
@@ -1643,7 +1643,7 @@
             } catch (e) {
                 alert('请求失败，请重试');
             } finally {
-                btn.disabled = false; btn.textContent = '立即抓取所有用户';
+                btn.disabled = false; btn.textContent = '抓取所有用户全部数据';
             }
         }
 
