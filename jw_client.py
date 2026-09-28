@@ -139,6 +139,10 @@ class GradeRequestError(RuntimeError):
     pass
 
 
+class GradeAuthenticationError(GradeRequestError):
+    pass
+
+
 def _grade_request(token: str, endpoint: str, params=None):
     with _session(token) as sess:
         response = sess.post(f"{BASE_URL}/{endpoint}", params=params, timeout=(5, 10))
@@ -147,7 +151,7 @@ def _grade_request(token: str, endpoint: str, params=None):
     if not isinstance(payload, dict):
         raise GradeRequestError("教务系统返回的成绩数据格式异常")
     if str(payload.get("code")) != "1":
-        raise GradeRequestError("教务系统拒绝查询，请重新登录后重试")
+        raise GradeAuthenticationError("教务系统登录状态已失效")
     if "data" not in payload:
         raise GradeRequestError("教务系统返回的成绩数据格式异常")
     return payload["data"]

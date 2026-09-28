@@ -338,7 +338,12 @@ def get_setting(key, default):
 
 
 # ── Token 管理 ────────────────────────────────────────────────────────────────
-def _ensure_token(username: str):
+def _ensure_token(
+    username: str,
+    force_refresh: bool = False,
+    rejected_token: str = None,
+    require_calendar: bool = True,
+):
     # 使用用户级别的锁防止并发刷新
     with _get_user_lock(username):
         with _db() as conn:
@@ -360,8 +365,10 @@ def _ensure_token(username: str):
             'clsName': jw_class or '',
         }
 
-        need_refresh = True
-        if token and token_time_str:
+        need_refresh = force_refresh or not token or not token_time_str
+        if force_refresh and rejected_token and token and token != rejected_token:
+            need_refresh = False
+        elif not force_refresh and token and token_time_str:
             try:
                 dt = datetime.fromisoformat(token_time_str)
                 if (datetime.now() - dt).total_seconds() < 3.5 * 3600:
@@ -378,7 +385,7 @@ def _ensure_token(username: str):
                              (token, datetime.now().isoformat(), username))
                 conn.commit()
 
-        if not kbjcmsid:
+        if require_calendar and not kbjcmsid:
             kbjcmsid = jw_client.get_kbjcmsid(token)
             with _db() as conn:
                 conn.execute('UPDATE users SET jw_kbjcmsid=? WHERE username=?',
@@ -423,6 +430,39 @@ def _store_term_grades(username: str, semester: str, data: dict):
             (username, semester, json.dumps(data, ensure_ascii=False), datetime.now().isoformat()),
         )
         conn.commit()
+
+
+def _request_grades_with_server_credentials(username: str, operation):
+    try:
+        token, _, _ = _ensure_token(username, require_calendar=False)
+    except RuntimeError as error:
+        raise jw_client.GradeRequestError(
+            '服务端保存的教务凭据无法完成自动登录，请联系管理员'
+        ) from error
+
+    try:
+        return operation(token)
+    except jw_client.GradeAuthenticationError:
+        logger.info('成绩查询 token 失效，服务端自动刷新 user=%s', username)
+
+    try:
+        refreshed_token, _, _ = _ensure_token(
+            username,
+            force_refresh=True,
+            rejected_token=token,
+            require_calendar=False,
+        )
+    except RuntimeError as error:
+        raise jw_client.GradeRequestError(
+            '服务端保存的教务凭据无法完成自动登录，请联系管理员'
+        ) from error
+
+    try:
+        return operation(refreshed_token)
+    except jw_client.GradeAuthenticationError as error:
+        raise jw_client.GradeRequestError(
+            '服务端已自动登录，但教务系统仍拒绝成绩查询，请稍后重试'
+        ) from error
 
 
 _grade_refresh_jobs = {}
@@ -481,15 +521,19 @@ def _start_grade_refresh(key, action, description):
 
 
 def _fetch_grade_semesters(username: str) -> dict:
-    token, _, _ = _ensure_token(username)
-    data = jw_client.get_grade_semesters(token)
+    data = _request_grades_with_server_credentials(
+        username,
+        jw_client.get_grade_semesters,
+    )
     _store_grade_semesters(username, data)
     return data
 
 
 def _fetch_term_grades(username: str, semester: str) -> dict:
-    token, _, _ = _ensure_token(username)
-    data = jw_client.get_term_grades(token, semester)
+    data = _request_grades_with_server_credentials(
+        username,
+        lambda token: jw_client.get_term_grades(token, semester),
+    )
     _store_term_grades(username, semester, data)
     return data
 
