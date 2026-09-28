@@ -12,10 +12,14 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from functools import wraps
 
+import requests
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, session, send_from_directory, g
 from flask_cors import CORS
 from werkzeug.exceptions import BadRequest
 from werkzeug.security import safe_join
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 import jw_client
 
@@ -256,13 +260,7 @@ def init_db():
                      (username TEXT PRIMARY KEY, data TEXT NOT NULL, cached_at TEXT NOT NULL)''')
         c.execute('''CREATE TABLE IF NOT EXISTS grades
                      (username TEXT, semester TEXT, data TEXT NOT NULL, cached_at TEXT NOT NULL,
-                      query_mode TEXT NOT NULL DEFAULT 'all',
                       PRIMARY KEY (username, semester))''')
-        try:
-            c.execute("ALTER TABLE grades ADD COLUMN query_mode TEXT NOT NULL DEFAULT 'best'")
-        except sqlite3.OperationalError as e:
-            if 'duplicate column name' not in str(e).lower():
-                logger.warning('数据库迁移警告: %s', e)
         c.execute('''CREATE TABLE IF NOT EXISTS settings
                      (key TEXT PRIMARY KEY, value TEXT)''')
         c.execute('SELECT value FROM settings WHERE key=?', (GRADE_CACHE_VERSION_SETTING,))
@@ -420,53 +418,124 @@ def _store_term_grades(username: str, semester: str, data: dict):
     with _db() as conn:
         conn.execute(
             '''INSERT OR REPLACE INTO grades
-               (username, semester, data, cached_at, query_mode)
-               VALUES (?, ?, ?, ?, 'all')''',
+               (username, semester, data, cached_at)
+               VALUES (?, ?, ?, ?)''',
             (username, semester, json.dumps(data, ensure_ascii=False), datetime.now().isoformat()),
         )
         conn.commit()
 
 
-def fetch_grade_semesters_from_jw(username: str) -> dict:
+_grade_refresh_jobs = {}
+_grade_refresh_jobs_lock = threading.Lock()
+
+
+def _claim_grade_refresh(key):
+    with _grade_refresh_jobs_lock:
+        existing = _grade_refresh_jobs.get(key)
+        if existing:
+            return existing, False
+        job = {'event': threading.Event(), 'result': None, 'error': None}
+        _grade_refresh_jobs[key] = job
+        return job, True
+
+
+def _execute_grade_refresh(key, job, action):
+    try:
+        job['result'] = action()
+    except Exception as error:
+        job['error'] = error
+    finally:
+        with _grade_refresh_jobs_lock:
+            if _grade_refresh_jobs.get(key) is job:
+                del _grade_refresh_jobs[key]
+        job['event'].set()
+    if job['error']:
+        raise job['error']
+    return job['result']
+
+
+def _run_grade_refresh(key, action):
+    job, claimed = _claim_grade_refresh(key)
+    if claimed:
+        return _execute_grade_refresh(key, job, action)
+    job['event'].wait()
+    if job['error']:
+        raise job['error']
+    return job['result']
+
+
+def _start_grade_refresh(key, action, description):
+    job, claimed = _claim_grade_refresh(key)
+    if not claimed:
+        return False
+
+    def runner():
+        try:
+            _execute_grade_refresh(key, job, action)
+            logger.info('%s完成', description)
+        except Exception as error:
+            logger.info('%s失败: %s', description, error)
+
+    threading.Thread(target=runner, daemon=True).start()
+    return True
+
+
+def _fetch_grade_semesters(username: str) -> dict:
     token, _, _ = _ensure_token(username)
     data = jw_client.get_grade_semesters(token)
     _store_grade_semesters(username, data)
     return data
 
 
-def fetch_term_grades_from_jw(username: str, semester: str) -> dict:
+def _fetch_term_grades(username: str, semester: str) -> dict:
     token, _, _ = _ensure_token(username)
     data = jw_client.get_term_grades(token, semester)
     _store_term_grades(username, semester, data)
     return data
 
 
-def _refresh_all_grades_for_user(username: str):
-    token, _, _ = _ensure_token(username)
-    semesters = jw_client.get_grade_semesters(token)
-    _store_grade_semesters(username, semesters)
-    for item in semesters['semesters']:
-        semester = item.get('semesterId', '')
-        if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
-            continue
-        data = jw_client.get_term_grades(token, semester)
-        _store_term_grades(username, semester, data)
+def fetch_grade_semesters_from_jw(username: str) -> dict:
+    return _run_grade_refresh(
+        (username, 'semesters'),
+        lambda: _fetch_grade_semesters(username),
+    )
 
 
-def _background_refresh_grade_semesters(username: str):
-    try:
-        fetch_grade_semesters_from_jw(username)
-        logger.info('后台刷新成绩学期完成 user=%s', username)
-    except Exception as e:
-        logger.info('后台刷新成绩学期失败 user=%s: %s', username, e)
+def fetch_term_grades_from_jw(username: str, semester: str) -> dict:
+    return _run_grade_refresh(
+        (username, semester),
+        lambda: _fetch_term_grades(username, semester),
+    )
 
 
-def _background_refresh_term_grades(username: str, semester: str):
-    try:
-        fetch_term_grades_from_jw(username, semester)
-        logger.info('后台刷新成绩完成 user=%s semester=%s', username, semester)
-    except Exception as e:
-        logger.info('后台刷新成绩失败 user=%s semester=%s: %s', username, semester, e)
+def _refresh_current_grades_for_user(username: str):
+    semesters = fetch_grade_semesters_from_jw(username)
+    semester = semesters['current_semester']
+    if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
+        raise jw_client.GradeRequestError('教务系统返回的当前学期格式异常')
+    return fetch_term_grades_from_jw(username, semester)
+
+
+def _refresh_grade_semesters_if_stale(username: str):
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT data, cached_at FROM grade_semesters WHERE username=?',
+            (username,),
+        ).fetchone()
+    if row and not _cache_is_stale(row[1]):
+        return json.loads(row[0])
+    return _fetch_grade_semesters(username)
+
+
+def _refresh_term_grades_if_stale(username: str, semester: str):
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT data, cached_at FROM grades WHERE username=? AND semester=?',
+            (username, semester),
+        ).fetchone()
+    if row and not _cache_is_stale(row[1]):
+        return json.loads(row[0])
+    return _fetch_term_grades(username, semester)
 
 
 def _background_refresh_user(username: str, week: int):
@@ -535,9 +604,9 @@ def background_fetch():
                                 logger.info('后台抓取邻近周失败 user=%s week=%d: %s', username, w, e)
 
                     try:
-                        _refresh_all_grades_for_user(username)
+                        _refresh_current_grades_for_user(username)
                     except Exception as e:
-                        logger.info('后台抓取成绩失败 user=%s: %s', username, e)
+                        logger.info('后台抓取当前学期成绩失败 user=%s: %s', username, e)
 
                     # 成功后重置失败计数和跳过计数
                     _user_fail_counts[username] = 0
@@ -755,29 +824,37 @@ def get_grade_semesters():
     if error:
         return error
 
-    force = request.args.get('force') == '1'
-    if not force:
-        with _db() as conn:
-            row = conn.execute(
-                'SELECT data, cached_at FROM grade_semesters WHERE username=?',
-                (username,),
-            ).fetchone()
-        if row:
-            stale = _cache_is_stale(row[1])
-            if stale:
-                threading.Thread(
-                    target=_background_refresh_grade_semesters,
-                    args=(username,),
-                    daemon=True,
-                ).start()
-            return jsonify({
-                'success': True,
-                **json.loads(row[0]),
-                'from_cache': True,
-                'cache_time': row[1],
-                'refreshing': stale,
-            })
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT data, cached_at FROM grade_semesters WHERE username=?',
+            (username,),
+        ).fetchone()
+    if row:
+        stale = _cache_is_stale(row[1])
+        if stale:
+            _start_grade_refresh(
+                (username, 'semesters'),
+                lambda: _refresh_grade_semesters_if_stale(username),
+                f'后台刷新成绩学期 user={username}',
+            )
+        return jsonify({
+            'success': True,
+            **json.loads(row[0]),
+            'from_cache': True,
+            'cache_time': row[1],
+            'refreshing': stale,
+        })
 
+    data = fetch_grade_semesters_from_jw(username)
+    return jsonify({'success': True, **data, 'from_cache': False})
+
+
+@app.route('/api/grades/semesters/refresh', methods=['POST'])
+@csrf_protected
+def refresh_grade_semesters():
+    username, error = _require_grade_user()
+    if error:
+        return error
     data = fetch_grade_semesters_from_jw(username)
     return jsonify({'success': True, **data, 'from_cache': False})
 
@@ -792,38 +869,54 @@ def get_grades():
     if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
         return jsonify({'success': False, 'message': '请选择有效学期'}), 400
 
-    force = request.args.get('force') == '1'
-    if not force:
-        with _db() as conn:
-            row = conn.execute(
-                '''SELECT data, cached_at FROM grades
-                   WHERE username=? AND semester=? AND query_mode='all' ''',
+    with _db() as conn:
+        row = conn.execute(
+            'SELECT data, cached_at FROM grades WHERE username=? AND semester=?',
+            (username, semester),
+        ).fetchone()
+    if row:
+        stale = _cache_is_stale(row[1])
+        if stale:
+            _start_grade_refresh(
                 (username, semester),
-            ).fetchone()
-        if row:
-            stale = _cache_is_stale(row[1])
-            if stale:
-                threading.Thread(
-                    target=_background_refresh_term_grades,
-                    args=(username, semester),
-                    daemon=True,
-                ).start()
-            return jsonify({
-                'success': True,
-                'semester': semester,
-                'data': json.loads(row[0]),
-                'query_mode': 'all',
-                'from_cache': True,
-                'cache_time': row[1],
-                'refreshing': stale,
-            })
+                lambda: _refresh_term_grades_if_stale(username, semester),
+                f'后台刷新成绩 user={username} semester={semester}',
+            )
+        return jsonify({
+            'success': True,
+            'semester': semester,
+            'data': json.loads(row[0]),
+            'record_scope': 'all',
+            'from_cache': True,
+            'cache_time': row[1],
+            'refreshing': stale,
+        })
 
     data = fetch_term_grades_from_jw(username, semester)
     return jsonify({
         'success': True,
         'semester': semester,
         'data': data,
-        'query_mode': 'all',
+        'record_scope': 'all',
+        'from_cache': False,
+    })
+
+
+@app.route('/api/grades/refresh', methods=['POST'])
+@csrf_protected
+def refresh_grades():
+    username, error = _require_grade_user()
+    if error:
+        return error
+    semester = (request.json or {}).get('semester', '')
+    if not re.fullmatch(r'\d{4}-\d{4}-[12]', semester):
+        return jsonify({'success': False, 'message': '请选择有效学期'}), 400
+    data = fetch_term_grades_from_jw(username, semester)
+    return jsonify({
+        'success': True,
+        'semester': semester,
+        'data': data,
+        'record_scope': 'all',
         'from_cache': False,
     })
 
@@ -851,11 +944,28 @@ def admin_grade_semesters(target_user):
             'SELECT data, cached_at FROM grade_semesters WHERE username=?',
             (target_user,),
         ).fetchone()
+        cached_semesters = {
+            item[0] for item in conn.execute(
+                'SELECT semester FROM grades WHERE username=? ORDER BY semester DESC',
+                (target_user,),
+            ).fetchall()
+        }
     if not row:
         return jsonify({'success': False, 'message': '该用户暂无成绩缓存'}), 404
+    data = json.loads(row[0])
+    semesters = [
+        item for item in data['semesters']
+        if item.get('semesterId') in cached_semesters
+    ]
+    if not semesters:
+        return jsonify({'success': False, 'message': '该用户暂无成绩缓存'}), 404
+    current_semester = data.get('current_semester', '')
+    if current_semester not in cached_semesters:
+        current_semester = semesters[0]['semesterId']
     return jsonify({
         'success': True,
-        **json.loads(row[0]),
+        'current_semester': current_semester,
+        'semesters': semesters,
         'target_user': target_user,
         'target_name': target_name,
         'from_cache': True,
@@ -873,8 +983,7 @@ def admin_grades(target_user):
         return jsonify({'success': False, 'message': '请选择有效学期'}), 400
     with _db() as conn:
         row = conn.execute(
-            '''SELECT data, cached_at FROM grades
-               WHERE username=? AND semester=? AND query_mode='all' ''',
+            'SELECT data, cached_at FROM grades WHERE username=? AND semester=?',
             (target_user, semester),
         ).fetchone()
     if not row:
@@ -883,7 +992,7 @@ def admin_grades(target_user):
         'success': True,
         'semester': semester,
         'data': json.loads(row[0]),
-        'query_mode': 'all',
+        'record_scope': 'all',
         'target_user': target_user,
         'target_name': target_name,
         'from_cache': True,
@@ -894,6 +1003,12 @@ def admin_grades(target_user):
 @app.errorhandler(jw_client.GradeRequestError)
 def grade_request_error(error):
     return jsonify({'success': False, 'message': str(error)}), 502
+
+
+@app.errorhandler(requests.RequestException)
+def external_request_error(error):
+    logger.warning('外部系统请求失败: %s', error)
+    return jsonify({'success': False, 'message': '教务系统暂时无法访问，请稍后重试'}), 502
 
 
 @app.route('/api/week_number', methods=['GET'])
@@ -1603,7 +1718,7 @@ def admin_list_users():
             c.execute('SELECT week FROM courses WHERE username=? ORDER BY week', (u[0],))
             cached_weeks = [r[0] for r in c.fetchall()]
             c.execute(
-                "SELECT semester FROM grades WHERE username=? AND query_mode='all' ORDER BY semester DESC",
+                'SELECT semester FROM grades WHERE username=? ORDER BY semester DESC',
                 (u[0],),
             )
             cached_grade_semesters = [r[0] for r in c.fetchall()]
@@ -1909,10 +2024,7 @@ def admin_force_fetch():
                                 conn.commit()
                         except Exception as e:
                             logger.warning('强制抓取失败 user=%s week=%d: %s', username, w, e)
-                try:
-                    _refresh_all_grades_for_user(username)
-                except Exception as e:
-                    logger.warning('强制抓取成绩失败 user=%s: %s', username, e)
+                _refresh_current_grades_for_user(username)
                 ok_count += 1
             except Exception as e:
                 fail_count += 1
@@ -1920,7 +2032,7 @@ def admin_force_fetch():
         logger.info('强制抓取完成：成功 %d 人，失败 %d 人', ok_count, fail_count)
 
     threading.Thread(target=_run, daemon=True).start()
-    return jsonify({'success': True, 'message': '已在后台开始抓取课表与成绩，请稍后刷新查看'})
+    return jsonify({'success': True, 'message': '已在后台开始抓取课表与当前学期成绩，请稍后刷新查看'})
 
 
 @app.route('/api/admin/restart', methods=['POST'])

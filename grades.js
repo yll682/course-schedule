@@ -18,11 +18,13 @@ const gradeApi = adminView
 let semestersLoaded = false;
 let currentGradeData = null;
 let currentGradePayload = null;
+let csrfToken = null;
 const qualitativeGradeRanks = new Map([
     ['优秀', 90], ['良好', 80], ['中等', 70],
     ['及格', 60], ['合格', 60], ['通过', 60],
-    ['不及格', 0], ['未通过', 0],
+    ['不及格', 0], ['不合格', 0], ['未通过', 0],
 ]);
+const failingGradeLabels = new Set(['不及格', '不合格', '未通过']);
 
 if (adminView) {
     backLink.href = '/admin.html';
@@ -30,8 +32,29 @@ if (adminView) {
     refreshButton.hidden = true;
 }
 
-async function requestGrades(url) {
-    const response = await fetch(url, { credentials: 'include', cache: 'no-store' });
+async function getCsrfToken() {
+    if (csrfToken) return csrfToken;
+    const response = await fetch('/api/csrf-token', { credentials: 'include', cache: 'no-store' });
+    if (!response.ok) throw new Error('无法获取安全令牌，请刷新页面重试');
+    const payload = await response.json();
+    csrfToken = payload.csrf_token;
+    return csrfToken;
+}
+
+async function requestGrades(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const headers = new Headers(options.headers || {});
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        headers.set('X-CSRF-Token', await getCsrfToken());
+        headers.set('Content-Type', 'application/json');
+    }
+    const response = await fetch(url, {
+        ...options,
+        method,
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+    });
     if (response.status === 401) {
         loginHelp.hidden = false;
         throw new Error('请登录后查询成绩');
@@ -65,9 +88,10 @@ function clearGrades() {
 }
 
 function isFailingGrade(value) {
-    if (value === '不及格') return true;
     if (value === '' || value === null || value === undefined) return false;
-    const numericValue = Number(value);
+    const normalizedValue = String(value).trim();
+    if (failingGradeLabels.has(normalizedValue)) return true;
+    const numericValue = Number(normalizedValue);
     return Number.isFinite(numericValue) && numericValue < 60;
 }
 
@@ -151,9 +175,13 @@ async function loadGrades(force = false) {
     setLoading(true);
     statusText.textContent = '正在查询成绩…';
     try {
-        const forceQuery = force && !adminView ? '&force=1' : '';
-        const payload = await requestGrades(`${gradeApi}?semester=${encodeURIComponent(semesterSelect.value)}${forceQuery}`);
-        if (payload.query_mode !== 'all') {
+        const payload = force && !adminView
+            ? await requestGrades('/api/grades/refresh', {
+                method: 'POST',
+                body: JSON.stringify({ semester: semesterSelect.value }),
+            })
+            : await requestGrades(`${gradeApi}?semester=${encodeURIComponent(semesterSelect.value)}`);
+        if (payload.record_scope !== 'all') {
             throw new Error('服务器成绩缓存格式已更新，请重启服务后刷新页面');
         }
         currentGradeData = payload.data;
@@ -171,8 +199,9 @@ async function loadSemesters(force = false) {
     setLoading(true);
     statusText.textContent = '正在获取学期…';
     try {
-        const forceQuery = force && !adminView ? '?force=1' : '';
-        const payload = await requestGrades(`${gradeApi}/semesters${forceQuery}`);
+        const payload = force && !adminView
+            ? await requestGrades('/api/grades/semesters/refresh', { method: 'POST', body: '{}' })
+            : await requestGrades(`${gradeApi}/semesters`);
         if (adminView) {
             const targetName = payload.target_name || targetUser;
             pageTitle.textContent = `💯 ${targetName}的成绩`;
