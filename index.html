@@ -1427,7 +1427,7 @@ body { padding: 10px; }
                 btn.style.cursor = '';
                 btn.style.display = '';
             } else {
-                btn.textContent = `${now.getMonth() + 1}/${now.getDate()}`;
+                btn.textContent = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                 btn.title = '';
                 btn.style.cursor = 'default';
                 btn.style.display = '';

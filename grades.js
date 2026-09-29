@@ -17,7 +17,6 @@ const gradeApi = adminView
     : '/api/grades';
 let semestersLoaded = false;
 let currentGradeData = null;
-let currentGradePayload = null;
 let csrfToken = null;
 const qualitativeGradeRanks = new Map([
     ['优秀', 90], ['良好', 80], ['中等', 70],
@@ -90,7 +89,6 @@ function clearGrades() {
     gradesWrap.hidden = true;
     loginHelp.hidden = true;
     currentGradeData = null;
-    currentGradePayload = null;
 }
 
 function isFailingGrade(value) {
@@ -121,20 +119,19 @@ function highestGrades(achievements) {
     return Array.from(bestByCourse.values());
 }
 
-function renderGrades(data, payload) {
+function renderGrades(data) {
     gradesList.replaceChildren();
     summary.replaceChildren();
     const allAchievements = data.achievement;
     const achievements = bestOnlyToggle.checked ? highestGrades(allAchievements) : allAchievements;
     const courseKeys = allAchievements.map(grade => grade.kcbh || grade.courseName);
     const courseCount = new Set(courseKeys).size;
-    const refreshStatus = payload.refreshing ? ' · 正在后台刷新' : '';
     const recordStatus = bestOnlyToggle.checked
         ? `显示 ${achievements.length} 条最高成绩 · 全部 ${allAchievements.length} 条记录`
         : `共 ${allAchievements.length} 条成绩记录 · ${courseCount} 门课程`;
     statusText.textContent = achievements.length
-        ? `${recordStatus}${refreshStatus}`
-        : `该学期暂无已发布成绩${refreshStatus}`;
+        ? recordStatus
+        : '该学期暂无已发布成绩';
     for (const [label, value] of [
         ['平均成绩', data.pjcj], ['平均学分绩点', data.pjxfjd],
         ['已修总学分', data.yxzxf], ['总学分绩点', data.zxfjd],
@@ -214,8 +211,7 @@ async function loadGrades(force = false) {
             throw new Error('服务器成绩数据格式已更新，请重启服务后刷新页面');
         }
         currentGradeData = payload.data;
-        currentGradePayload = payload;
-        renderGrades(payload.data, payload);
+        renderGrades(payload.data);
     } catch (error) {
         statusText.textContent = error instanceof TypeError ? '无法连接服务器，请检查网络后重试' : error.message;
     } finally {
@@ -266,7 +262,7 @@ async function loadSemesters(force = false) {
 
 semesterSelect.addEventListener('change', () => loadGrades());
 bestOnlyToggle.addEventListener('change', () => {
-    if (currentGradeData && currentGradePayload) renderGrades(currentGradeData, currentGradePayload);
+    if (currentGradeData) renderGrades(currentGradeData);
 });
 refreshButton.addEventListener('click', () => semestersLoaded && semesterSelect.value ? loadGrades(true) : loadSemesters(true));
 window.addEventListener('pagehide', clearGrades);
