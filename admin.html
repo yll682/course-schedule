@@ -972,6 +972,7 @@
         }
 
         let isAdmin = false;
+        let currentUsername = '';
         let maxWeekForExport = 20;
         let adminUsersList = [];
         const BUTTON_MODE_KEY = 'schedule_button_mode';
@@ -1218,6 +1219,7 @@
 
             const userResp = await fetch('/api/user', { credentials: 'include' });
             const user = await userResp.json();
+            currentUsername = user.username || '';
             const adminLabel = isAdmin ? ' · <span style="color:#cf1322">管理员</span>' : '';
             document.getElementById('user-info').textContent = '';
 
@@ -2210,6 +2212,9 @@
                     const groupBtn = u.is_admin
                         ? ''
                         : `<button class="btn btn-default btn-sm" onclick="showUserGroupModal('${esc(u.username)}', ${u.group_id || 'null'})">设置组</button>`;
+                    const impersonateBtn = u.username === currentUsername
+                        ? ''
+                        : `<button class="btn btn-primary btn-sm" onclick="impersonateUser(${u._index})">以此身份登录</button>`;
                     return `<div class="user-row">
                         <div class="user-row-head">
                             <span><strong>${esc(u.name)}</strong>
@@ -2217,6 +2222,7 @@
                                 ${groupLabel}${adminLabel}
                             </span>
                             <span>
+                                ${impersonateBtn}
                                 ${groupBtn}
                                 <span style="color:#aaa;font-size:0.78rem;margin-left:8px">最近活跃 ${loginStr}</span>
                             </span>
@@ -2258,6 +2264,29 @@
         function viewUserGrades(userIdx) {
             const u = adminUsersList[userIdx];
             location.href = `/grades.html?as=${encodeURIComponent(u.username)}`;
+        }
+
+        // ── 以用户身份登录（直接替换当前会话） ─────────────────────────────────
+        async function impersonateUser(userIdx) {
+            const u = adminUsersList[userIdx];
+            if (!u) return;
+            if (u.username === currentUsername) { alert('这就是你当前登录的账号'); return; }
+
+            const who = `${u.name || u.username}（${u.username}）`;
+            if (!confirm(`将以 ${who} 的身份登录。\n\n登录后当前会话会被替换成该用户，你做的所有操作都等同于他本人操作。想回到管理员账号，需要退出登录后重新登录。\n\n确定继续吗？`)) return;
+
+            try {
+                const resp = await safeFetch('/api/admin/impersonate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u.username }),
+                });
+                const data = await resp.json();
+                if (!data.success) { alert(data.error || '切换失败'); return; }
+                window.location.href = data.redirect || '/';
+            } catch (e) {
+                alert('切换失败，请重试');
+            }
         }
 
         // ── 用户组管理 ─────────────────────────────────────────────────────────────

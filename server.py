@@ -2081,6 +2081,46 @@ def admin_default_group():
 
 
 
+@app.route('/api/admin/impersonate', methods=['POST'])
+@csrf_protected
+def admin_impersonate():
+    """管理员以指定用户身份登录：直接替换会话，之后与本人在登录完全一致"""
+    if 'username' not in session or not _is_current_admin():
+        return jsonify({'error': '无权限'}), 403
+
+    data = request.json or {}
+    target = str(data.get('username', '')).strip()
+    if not target:
+        return jsonify({'error': '缺少用户名'}), 400
+    if target == session['username']:
+        return jsonify({'error': '不能切换到自己'}), 400
+
+    with _db() as conn:
+        row = conn.execute('SELECT jw_name FROM users WHERE username=?', (target,)).fetchone()
+    if not row:
+        return jsonify({'error': '用户不存在'}), 404
+
+    admin = session['username']
+
+    # 与登录一致：清空原会话后重建，原管理员身份不保留，需退出登录后重新登录才能回去
+    session.clear()
+    session.permanent = True
+    session['username'] = target
+    session['is_admin'] = _admin_role(target) is not None   # 仅作参考，实际权限每次实时计算
+    csrf_token = generate_csrf_token()
+
+    logger.info('管理员 %s 以用户 %s 身份登录', admin, target)
+    return jsonify({
+        'success':    True,
+        'username':   target,
+        'name':       row[0] or target,
+        'is_admin':   _admin_role(target) is not None,
+        'admin_role': _admin_role(target),
+        'csrf_token': csrf_token,
+        'redirect':   '/',
+    })
+
+
 @app.route('/api/admin/view/<string:target_user>/<int:week>', methods=['GET'])
 def admin_view(target_user, week):
     """管理员查看指定用户的缓存课表（不触发实时抓取）"""
