@@ -479,6 +479,14 @@
                     </div>
                     <div class="action-row">
                         <div class="action-row-text">
+                            <div class="action-row-title">导出到 WakeUp 课程表</div>
+                            <div class="action-row-desc">请在 WakeUp 中选择 Excel 导入</div>
+                            <div class="action-row-status" id="wakeup-status" style="color:var(--c-muted)"></div>
+                        </div>
+                        <button class="btn btn-default btn-sm" id="wakeup-btn" onclick="exportWakeUpCsv()">导出 CSV</button>
+                    </div>
+                    <div class="action-row">
+                        <div class="action-row-text">
                             <div class="action-row-title">周次查询接口</div>
                             <div class="action-row-desc">供第三方脚本查询当前周次</div>
                             <div class="action-row-status" id="week-number-url-status"></div>
@@ -1775,24 +1783,32 @@
         }
 
         // ── 导出整学期 ──────────────────────────────────────────────────────────
+        // 导出前先强制从教务抓取一遍全学期最新课表（失败回退本地缓存）
         async function exportSemester() {
             const btn    = document.getElementById('export-btn');
             const status = document.getElementById('export-status');
-            btn.disabled = true;
-            const result = { format: 'semester', weeks: {}, exported_at: new Date().toISOString() };
-            let maxW = maxWeekForExport;
+            if (btn.disabled) return;
 
-            for (let w = 1; w <= maxW; w++) {
-                status.style.display = 'block';
-                status.textContent   = `正在导出第 ${w}/${maxW} 周...`;
-                try {
-                    const resp = await fetch(`/api/courses/${w}`, { credentials: 'include' });
-                    const data = await resp.json();
-                    if (!data.error) {
-                        result.weeks[w] = data;
-                        if (data.metadata?.max_week) maxW = Math.min(data.metadata.max_week, 30);
-                    }
-                } catch (_) {}
+            btn.disabled = true;
+            btn.textContent = '抓取中…';
+            status.style.display = 'block';
+            status.style.color = 'var(--c-muted)';
+            status.textContent = '正在抓取最新课表…';
+
+            const { weeks, freshWeeks, cachedWeeks, failedWeeks } = await refreshSemesterWeeks((w, total) => {
+                status.textContent = `正在抓取最新课表：第 ${w}/${total} 周…`;
+            });
+
+            if (weeks.size === 0) {
+                status.textContent = '✗ 抓取失败，没有可导出的课表数据';
+                btn.disabled = false;
+                btn.textContent = '导出';
+                return;
+            }
+
+            const result = { format: 'semester', weeks: {}, exported_at: new Date().toISOString() };
+            for (const w of [...weeks.keys()].sort((a, b) => a - b)) {
+                result.weeks[w] = weeks.get(w);
             }
 
             const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
@@ -1802,9 +1818,227 @@
             a.click();
             URL.revokeObjectURL(a.href);
 
-            status.textContent = `✓ 导出完成，共 ${Object.keys(result.weeks).length} 周`;
+            const weekNums  = [...weeks.keys()].sort((a, b) => a - b);
+            const weekRange = weekNums.length ? `第 ${weekNums[0]}~${weekNums[weekNums.length - 1]} 周` : '';
+            let msg = freshWeeks.size
+                ? `✓ 已抓取最新课表${weekRange ? `（${weekRange}）` : ''}，共导出 ${weeks.size} 周`
+                : `⚠ 教务暂时无法访问，已使用本地缓存导出 ${weeks.size} 周`;
+            if (cachedWeeks.length) {
+                msg += `；第 ${cachedWeeks.sort((a, b) => a - b).join('、')} 周抓取失败，已使用本地缓存`;
+            }
+            if (failedWeeks.length) {
+                msg += `；第 ${failedWeeks.sort((a, b) => a - b).join('、')} 周无可用数据`;
+            }
+            status.textContent = msg;
+            status.style.color = (cachedWeeks.length || failedWeeks.length || !freshWeeks.size) ? '#fa8c16' : '#52c41a';
             btn.disabled = false;
-            setTimeout(() => { status.style.display = 'none'; }, 4000);
+            btn.textContent = '导出';
+            setTimeout(() => { status.style.display = 'none'; }, 8000);
+        }
+
+        // ── 导出到 WakeUp 课程表（CSV） ──────────────────────────────────────────
+        // 列序与 WakeUp 官方模板完全一致：课程名称,星期,开始节数,结束节数,老师,地点,周数
+        // 星期 1~7 对应周一~周日；周数支持「1-16」「1-16单」「1-16双」「1、3、5」等写法。
+        const WAKEUP_HEADER = ['课程名称', '星期', '开始节数', '结束节数', '老师', '地点', '周数'];
+        const WAKEUP_WEEKDAY_BY_ID = { '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '0': 7 };
+        const WAKEUP_WEEKDAY_BY_CN = { '周一': 1, '周二': 2, '周三': 3, '周四': 4, '周五': 5, '周六': 6, '周日': 7, '周天': 7 };
+        const WAKEUP_WEEKDAY_BY_EN = { monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6, sunday: 7 };
+
+        // 教务数据里 weekday 是 '1'~'6' + '0'（周日），也兼容中文/英文星期名
+        function wakeUpWeekday(day) {
+            const raw = String((day && day.weekday) ?? '').trim();
+            const has = (map, k) => Object.prototype.hasOwnProperty.call(map, k);
+            if (has(WAKEUP_WEEKDAY_BY_ID, raw)) return WAKEUP_WEEKDAY_BY_ID[raw];
+            const cn = String((day && day.weekday_cn) ?? '').trim();
+            if (has(WAKEUP_WEEKDAY_BY_CN, cn)) return WAKEUP_WEEKDAY_BY_CN[cn];
+            const en = raw.toLowerCase();
+            return has(WAKEUP_WEEKDAY_BY_EN, en) ? WAKEUP_WEEKDAY_BY_EN[en] : 0;
+        }
+
+        // 把周次集合压缩成 WakeUp 可识别的写法
+        function formatWakeUpWeeks(weeks) {
+            const arr = [...new Set(weeks)].filter(w => Number.isInteger(w) && w > 0).sort((a, b) => a - b);
+            const tokens = [];
+            let i = 0;
+            while (i < arr.length) {
+                // 连续周（步长 1）优先：长度 ≥ 2 输出「a-b」
+                let j = i;
+                while (j + 1 < arr.length && arr[j + 1] - arr[j] === 1) j++;
+                if (j > i) {
+                    tokens.push(`${arr[i]}-${arr[j]}`);
+                    i = j + 1;
+                    continue;
+                }
+                // 单/双周（步长 2）：长度 ≥ 3 输出「a-b单」/「a-b双」
+                let k = i;
+                while (k + 1 < arr.length && arr[k + 1] - arr[k] === 2) k++;
+                if (k - i + 1 >= 3) {
+                    tokens.push(`${arr[i]}-${arr[k]}${arr[i] % 2 === 1 ? '单' : '双'}`);
+                    i = k + 1;
+                    continue;
+                }
+                tokens.push(String(arr[i]));
+                i++;
+            }
+            return tokens.join('、');
+        }
+
+        function csvField(value) {
+            const s = String(value ?? '').replace(/[\r\n]+/g, ' ').trim();
+            return /[",]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }
+
+        // 抓取某一周课表：先强制从教务拉最新数据（会同时刷新数据库缓存），
+        // 抓取失败再退回本地缓存，保证导出不会因为某一周失败而整体失败。
+        async function fetchWeekForExport(week) {
+            const tryFetch = async (url) => {
+                const ctrl  = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 25000);
+                try {
+                    const resp = await fetch(url, { credentials: 'include', signal: ctrl.signal });
+                    return await resp.json();
+                } finally {
+                    clearTimeout(timer);
+                }
+            };
+
+            try {
+                const data = await tryFetch(`/api/courses/${week}?force=1`);
+                if (!data.error) return { data, fresh: true };
+            } catch (_) { /* 教务不可用或超时：走缓存兜底 */ }
+
+            const data = await tryFetch(`/api/courses/${week}`);
+            if (data.error) throw new Error(data.error);
+            return { data, fresh: false };
+        }
+
+        // 抓取整个学期（第 1 周 → 教务返回的 max_week），返回每周数据与抓取结果。
+        // JSON 导出和 WakeUp 导出共用，保证两者拿到的都是同一份最新数据。
+        async function refreshSemesterWeeks(onProgress) {
+            const weeks       = new Map();   // week => 课表数据
+            const freshWeeks  = new Set();   // 从教务实时抓取到的周次
+            const cachedWeeks = [];          // 抓取失败、回退到本地缓存的周次
+            const failedWeeks = [];          // 无可用数据的周次
+            let learnedMax = false;
+            let maxW = Math.min(Math.max(parseInt(maxWeekForExport, 10) || 20, 1), 30);
+
+            for (let w = 1; w <= maxW; w++) {
+                if (typeof onProgress === 'function') onProgress(w, maxW);
+                try {
+                    const { data, fresh } = await fetchWeekForExport(w);
+                    weeks.set(w, data);
+                    if (fresh) freshWeeks.add(w); else cachedWeeks.push(w);
+
+                    // 以教务返回的 max_week 为准，确定整个学期要抓取的周次
+                    const metaMax = parseInt(data.metadata && data.metadata.max_week, 10);
+                    if (!learnedMax && metaMax > 0) {
+                        maxW = Math.min(Math.max(metaMax, 1), 30);
+                        learnedMax = true;
+                    }
+                } catch (_) {
+                    failedWeeks.push(w);
+                }
+            }
+            return { weeks, freshWeeks, cachedWeeks, failedWeeks };
+        }
+
+        async function exportWakeUpCsv() {
+            const btn    = document.getElementById('wakeup-btn');
+            const status = document.getElementById('wakeup-status');
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btn.textContent = '抓取中…';
+            status.style.display = 'block';
+            status.style.color = 'var(--c-muted)';
+
+            const { weeks, freshWeeks, cachedWeeks, failedWeeks } = await refreshSemesterWeeks((w, total) => {
+                status.textContent = `正在抓取最新课表：第 ${w}/${total} 周…`;
+            });
+            status.textContent = '正在生成 CSV…';
+
+            // key => { name, weekday, start, end, teacher, location, weeks:Set }
+            const rowsMap = new Map();
+            let skipped = 0;
+
+            for (const [w, data] of weeks) {
+                for (const day of data['完整课表'] || []) {
+                    const weekday = wakeUpWeekday(day);
+                    const courses = day.courses || [];
+                    if (!weekday) { skipped += courses.length; continue; }
+
+                    for (const course of courses) {
+                        const name = String(course.course_name || '').trim();
+                        const slots = course.time_slots || {};
+                        const start = parseInt(slots.start_slot, 10);
+                        if (!name || !start) { skipped++; continue; }
+
+                        const duration = parseInt(slots.duration, 10) || 1;
+                        const end = parseInt(slots.end_slot, 10) || (start + duration - 1);
+                        const teacher  = String(course.teacher  || '').trim();
+                        const location = String(course.location || '').trim();
+
+                        const key = [weekday, start, end, name, teacher, location].join('\u0001');
+                        let item = rowsMap.get(key);
+                        if (!item) {
+                            item = { name, weekday, start, end, teacher, location, weeks: new Set() };
+                            rowsMap.set(key, item);
+                        }
+                        item.weeks.add(w);
+                    }
+                }
+            }
+
+            if (rowsMap.size === 0) {
+                status.textContent = '✗ 没有可导出的课程，请确认课表数据正常后再试';
+                status.style.color = '#ff4d4f';
+                btn.disabled = false;
+                btn.textContent = '导出 CSV';
+                return;
+            }
+
+            const rows = [...rowsMap.values()].sort((a, b) =>
+                a.weekday - b.weekday ||
+                a.start - b.start ||
+                a.name.localeCompare(b.name, 'zh-Hans-CN')
+            );
+
+            const lines = [WAKEUP_HEADER.join(',')];
+            for (const r of rows) {
+                lines.push([
+                    r.name, r.weekday, r.start, r.end,
+                    r.teacher, r.location, formatWakeUpWeeks(r.weeks),
+                ].map(csvField).join(','));
+            }
+
+            // 官方模板为 UTF-8 BOM + CRLF，保持一致，避免解析异常
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `WakeUp课程表_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+
+            const weekNums = [...weeks.keys()].sort((a, b) => a - b);
+            const weekRange = weekNums.length
+                ? `第 ${weekNums[0]}~${weekNums[weekNums.length - 1]} 周`
+                : '';
+            let msg = freshWeeks.size
+                ? `✓ 已抓取最新课表${weekRange ? `（${weekRange}）` : ''}并生成 ${rows.length} 条记录，请在 WakeUp 中选择 Excel 导入`
+                : `⚠ 教务暂时无法访问，已使用本地缓存生成 ${rows.length} 条记录`;
+            if (skipped) msg += `；${skipped} 条缺少星期/节次的记录已跳过`;
+            if (cachedWeeks.length) {
+                const list = cachedWeeks.sort((a, b) => a - b).join('、');
+                msg += `；第 ${list} 周抓取失败，已使用本地缓存`;
+            }
+            if (failedWeeks.length) {
+                const list = failedWeeks.sort((a, b) => a - b).join('、');
+                msg += `；第 ${list} 周无可用数据，导出可能不完整`;
+            }
+            status.textContent = msg;
+            status.style.color = (cachedWeeks.length || failedWeeks.length || !freshWeeks.size) ? '#fa8c16' : '#52c41a';
+            btn.disabled = false;
+            btn.textContent = '导出 CSV';
         }
 
         // ── 我的分享码 ───────────────────────────────────────────────────────────
