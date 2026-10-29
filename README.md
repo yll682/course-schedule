@@ -37,7 +37,7 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 ```
 
-国内线路（CNB 镜像）：
+国内线路（CNB）：
 ```bash
 bash <(curl -fsSL https://cnb.cool/yll682/course-schedule/-/git/raw/master/deploy.sh)
 ```
