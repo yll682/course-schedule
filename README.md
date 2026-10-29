@@ -39,8 +39,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/maste
 
 国内线路（CNB）：
 ```bash
-bash <(curl -fsSL https://cnb.cool/yll682/course-schedule/-/git/raw/master/deploy.sh)
+bash <(curl -fsSL https://cnb.cool/yll682/course-schedule/-/git/raw/master/deploy.cn.sh)
 ```
+
+两条命令对应两个专用脚本：国内版（`deploy.cn.sh`）下载与克隆代码均优先走 CNB，失败才回退 GitHub；国际版（`deploy.sh`）相反。其余安装逻辑完全一致，使用体验无差别。
 
 运行后出现菜单，选择操作：
 
