@@ -37,9 +37,9 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 ```
 
-国内线路（EdgeOne 加速）：
+国内线路（CNB 镜像）：
 ```bash
-bash <(curl -fsSL https://edgeone.gh-proxy.org/https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
+bash <(curl -fsSL https://cnb.cool/yll682/course-schedule/-/git/raw/master/deploy.sh)
 ```
 
 运行后出现菜单，选择操作：

@@ -5,12 +5,12 @@
 #   bash <(curl -fsSL https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
 #
 #   国内加速：
-#   bash <(curl -fsSL https://edgeone.gh-proxy.org/https://raw.githubusercontent.com/yll682/course-schedule/master/deploy.sh)
+#   bash <(curl -fsSL https://cnb.cool/yll682/course-schedule/-/git/raw/master/deploy.sh)
 # =============================================================
 set -euo pipefail
 
 REPO_URL="https://github.com/yll682/course-schedule.git"
-REPO_URL_CN="https://edgeone.gh-proxy.org/https://github.com/yll682/course-schedule.git"
+REPO_URL_CN="https://cnb.cool/yll682/course-schedule.git"
 APP_DIR="/opt/course-schedule"
 APP_USER="courseapp"
 SERVICE_NAME="course-schedule"
